@@ -4,7 +4,9 @@ entrypoints Program ;
 
 Program.    Program ::= [TopDef] ;
 
-FnDef.	    TopDef ::= "def" Type Ident "(" [Arg] ")" Block ;
+Fn.         TopDef ::= FnDef ;
+
+FnDef.	    FnDef ::= "def" Type Ident "(" [Arg] ")" Block ;
 
 VarDef.     TopDef ::= "var" Type Item ";";
 

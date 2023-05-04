@@ -22,12 +22,12 @@ data TypeOfResult = MyInt Integer
   deriving (Show)
 
 
-
 type Loc = Int -- lokacje pamieci
 type Env = M.Map String Loc
-type Funcs = M.Map String ??
 type Mem  = M.Map Loc TypeOfResult
-type Store = (Mem, Loc, Funcs)
+type FuncMem = M.Map String (G.FnDef, Env)
+type Store = (Mem, Loc, FuncMem)
+--type Store = (Mem, Loc)
 
 type Result a = ExceptT String (StateT Store (ReaderT Env IO)) a
 
@@ -37,35 +37,35 @@ failure x = throwError $ "x " ++ show x
 -- rezerwacja nowej lokacji
 newloc :: Result Loc
 newloc = do
-  (st,l) <- get
-  put (st,l+1)
+  (st,l,f) <- get
+  put (st,l+1,f)
   return l
 
 -- funkcja pomocnicza do zmiany pamięci
 -- takie modify, które zmienia tylko część stanu 
 modifyMem :: (Mem -> Mem) -> Result ()
 modifyMem f =
-  modify (\(st,l) -> (f st,l))
+  modify (\(st,l, fc) -> (f st,l, fc))
+
+modifyFuncMem :: (FuncMem -> FuncMem) -> Result ()
+modifyFuncMem f =
+  modify (\(st,l,func) -> (st,l,f func))
 
 transIdent :: G.Ident -> Result String
 transIdent x = case x of
   G.Ident string -> return string
 
-transProgram :: Show a => G.Program' a -> Result()
+--transProgram :: Show a => G.Program' a -> Result()
 transProgram x = case x of
   G.Program _ topdefs -> transTopDefs topdefs
 
-transTopDefs :: Show a => [G.TopDef' a] -> Result ()
+--transTopDefs :: Show a => [G.TopDef' a] -> Result ()
 transTopDefs [] = return ()
 transTopDefs (y:ys) = case y of
 
-    G.FnDef _ type_ ident args block -> do
-        id <- transIdent ident
-        case id of
-          "main" -> transBlock block >> transTopDefs ys
-          _ -> transTopDefs ys -- olewam na razie funkcje inne niz main
-     
+    G.Fn _ fndef -> transFnDef fndef >> transTopDefs ys
 
+     
     G.VarDef _ type_ item -> case item of
       G.NoInit _ ident -> do
         l <- newloc
@@ -82,27 +82,18 @@ transTopDefs (y:ys) = case y of
         modifyMem (M.insert l e)
         local (M.insert id l) (transTopDefs ys)
 
-{-
-transTopDef :: Show a => G.TopDef' a -> Result
-transTopDef x = case x of
-  G.FnDef _ type_ ident args block -> undefined
-
-  G.VarDef _ type_ item -> case item of
-      G.NoInit _ ident -> do
-        l <- newloc
+transFnDef :: G.FnDef -> Result()
+transFnDef x = case x of
+  G.FnDef _ type_ ident args block -> do
         id <- transIdent ident
-        let i = MyInt 0
-        modifyMem (M.insert l i)
-        local (M.insert id l) (transTopDefs ys)
+        env <- ask
+        case id of
+          "main" -> transBlock block 
+          _ -> do
+            modifyFuncMem(M.insert id (x, env))
 
 
-      G.Init _ ident expr -> do
-        e <- transExpr expr
-        l <- newloc
-        id <- transIdent ident
-        modifyMem (M.insert l e)
-        local (M.insert id l) (transTopDefs ys)
--}
+
 
 transArg :: Show a => G.Arg' a -> Result ()
 transArg x = case x of
@@ -131,7 +122,7 @@ transStmts (x:xs) = case x of
   
   G.Decl _ topdef -> case topdef of
     
-      G.FnDef _ type_ ident args block -> undefined
+      G.Fn _ fndef -> undefined
 
       G.VarDef _ type_ item -> case item of
           G.NoInit _ ident -> do
@@ -212,7 +203,7 @@ transExpr x = case x of
               env <- ask
               id <-  transIdent ident
               let l = fromMaybe (error "undefined variable") (M.lookup id env)
-              (st,_)  <- get
+              (st,_,_)  <- get
               return $ fromMaybe (error "undefined location") (M.lookup l st)
 
   G.ELitInt _ integer -> return $ MyInt integer
@@ -292,15 +283,15 @@ interpret = transProgram
 -- Ignore function definitions and just execute block of statements
 -- exec (MT.Prog _ (MT.Func _ (MT.FuncDefStmt _ _ _ _ (MT.Blck _ stmts)) : _)) = interpret stmt
 
-
+first (a, b,c) = a
 
 runInterpreter program = 
-    let (newEnv, newState) = (M.empty, (M.empty, 0))
+    let (newEnv, newState) = (M.empty, (M.empty, 0, M.empty))
     in do 
     (res, a) <- runReaderT (runStateT (runExceptT (interpret program)) newState) newEnv
     case res of
       Left e -> putStrLn $ "runtime error: " ++ e
-      Right f -> mapM_ wypisz $ M.toList $ fst $ a
+      Right f -> mapM_ wypisz $ M.toList $ first $ a
           where 
             wypisz (l, i) = do {putStr $ (show l)++", "; putStrLn $ show i}  
       
