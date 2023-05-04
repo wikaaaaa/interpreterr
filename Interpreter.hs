@@ -55,11 +55,11 @@ transIdent :: G.Ident -> Result String
 transIdent x = case x of
   G.Ident string -> return string
 
---transProgram :: Show a => G.Program' a -> Result()
+transProgram ::  G.Program -> Result()
 transProgram x = case x of
   G.Program _ topdefs -> transTopDefs topdefs
 
---transTopDefs :: Show a => [G.TopDef' a] -> Result ()
+transTopDefs :: [G.TopDef] -> Result ()
 transTopDefs [] = return ()
 transTopDefs (y:ys) = case y of
 
@@ -95,12 +95,12 @@ transFnDef x = case x of
 
 
 
-transArg :: Show a => G.Arg' a -> Result ()
+transArg :: G.Arg -> Result ()
 transArg x = case x of
   G.Arg _ type_ ident -> failure x
   G.ArgRef _ type_ ident -> failure x
 
-transBlock :: Show a => G.Block' a -> Result()
+transBlock ::  G.Block -> Result()
 transBlock x = case x of
   G.Block _ stmts -> transStmts stmts -- tu jakis local chyba
 
@@ -112,7 +112,7 @@ decResult :: TypeOfResult -> TypeOfResult
 decResult (MyInt n) = MyInt (n - 1)
 
 
-transStmts :: Show a => [G.Stmt' a] -> Result()
+transStmts ::  [G.Stmt ] -> Result()
 transStmts [] = return ()
 transStmts (x:xs) = case x of
 
@@ -184,20 +184,25 @@ transStmts (x:xs) = case x of
   G.Break _ -> undefined
   G.Continue _ -> undefined
 
-transItem :: Show a => G.Item' a -> Result()
+transItem ::  G.Item -> Result()
 transItem x = case x of
   G.NoInit _ ident -> failure x
   G.Init _ ident expr -> failure x
 
-transType :: Show a => G.Type' a -> Result()
+transType ::  G.Type -> Result()
 transType x = case x of
   G.MyInt _ -> failure x
   G.MyStr _ -> failure x
   G.MyBool _ -> failure x
   G.MyVoid _ -> failure x
 
+-- co z funkcjami ktore cos zwracaja? jak tą wartosc tam wrócic, na razie zajmijmy sie void
+-- i olewam argumenty
+transAppFunc x = case x of
+  G.FnDef _ type_ ident args block -> transBlock block
 
-transExpr :: Show a => G.Expr' a -> Result TypeOfResult
+
+transExpr ::  G.Expr -> Result TypeOfResult
 transExpr x = case x of
   G.EVar _ ident -> do
               env <- ask
@@ -217,7 +222,12 @@ transExpr x = case x of
                   "print" -> do
                             liftIO $ mapM_ print e
                             return $ MyBool True
-                  _ -> undefined
+                  _ -> do
+                    (st,l,funcMem) <- get
+                    let (fun, env) = fromMaybe (error "undefined function") (M.lookup id funcMem)
+                    local (\e -> env) (transAppFunc fun)
+                     -- zmienic localnie srodowisko na sprzed deklaracji funkcji 
+                    return $ MyInt 0
                     
   G.EString _ string -> return $ MyStr string
 
@@ -257,18 +267,18 @@ transExpr x = case x of
                     MyBool e2 <- transExpr expr2
                     return $ MyBool (e1 || e2)
 
-transAddOp :: Show a => G.AddOp' a -> Result (Integer -> Integer -> Integer) 
+transAddOp :: G.AddOp -> Result (Integer -> Integer -> Integer) 
 transAddOp x = case x of
   G.Plus _ -> return (+)
   G.Minus _ -> return (-)
 
-transMulOp :: Show a => G.MulOp' a -> Result (Integer -> Integer -> Integer)
+transMulOp :: G.MulOp -> Result (Integer -> Integer -> Integer)
 transMulOp x = case x of
   G.Times _ -> return (*)
   G.Div _ -> undefined
   G.Mod _ -> undefined
 
-transRelOp :: Show a => G.RelOp' a -> Result(Integer -> Integer -> Bool)
+transRelOp :: G.RelOp -> Result(Integer -> Integer -> Bool)
 transRelOp x = case x of
   G.LTH _ -> return (<=)
   G.LE _ -> return (<)

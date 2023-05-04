@@ -1,2 +1,10 @@
-var int x = 1;
-var int y = x + 9;
+var int x = 4;
+
+def void funkcja () {
+    var int p = 12;
+}
+
+def int main () {
+    var int x = 0;  
+    fn print(x);
+}
