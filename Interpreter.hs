@@ -6,6 +6,7 @@ import Control.Monad.Reader
 import Control.Monad.State
 import Data.Maybe(fromMaybe)
 import Control.Monad.Except
+import Control.Exception (Exception)
 
 import Prelude
   ( ($), (.)
@@ -16,10 +17,12 @@ import Prelude
   , all, elem, foldr, id, map, null, replicate, shows, span, Show,  Either(..), IO, show, error, undefined, putStrLn, fst, putStr
   )
 
+
 data TypeOfResult = MyInt Integer 
                   | MyStr String
                   | MyBool Bool
   deriving (Show)
+
 
 
 type Loc = Int -- lokacje pamieci
@@ -93,8 +96,6 @@ transFnDef x = case x of
             modifyFuncMem(M.insert id (x, env))
 
 
-
-
 transArg :: G.Arg -> Result ()
 transArg x = case x of
   G.Arg _ type_ ident -> failure x
@@ -163,8 +164,9 @@ transStmts (x:xs) = case x of
           modifyMem $ \mem -> M.adjust decResult l mem
           transStmts xs
 
-  G.Ret _ expr -> failure x
-  G.VRet _ -> failure x
+  G.Ret _ expr -> undefined
+          
+  G.VRet _ ->undefined
 
   G.Cond _ expr block -> do
           MyBool e <- transExpr expr
@@ -198,9 +200,25 @@ transType x = case x of
 
 -- co z funkcjami ktore cos zwracaja? jak tą wartosc tam wrócic, na razie zajmijmy sie void
 -- i olewam argumenty
-transAppFunc x = case x of
-  G.FnDef _ type_ ident args block -> transBlock block
+transAppFunc :: G.FnDef -> [G.Expr] -> Result ()
+transAppFunc x expr = case x of
+  G.FnDef _ type_ ident args block -> doFunc args expr block
 
+-- typechecker bedzie sprawdzal czy podane expr sa dobrego typu
+--insertArg [] [] = local () ()
+doFunc :: [G.Arg] -> [G.Expr] -> G.Block -> Result ()
+doFunc [] [] block =  transBlock block
+doFunc (arg:args) (expr:exprs) block = do
+              e <- transExpr expr
+              case arg of
+
+                G.Arg _ type_ ident -> do
+                              id <- transIdent ident
+                              l <- newloc
+                              modifyMem (M.insert l e)
+                              local (M.insert id l) (doFunc args exprs block)
+
+                G.ArgRef _ type_ ident -> undefined
 
 transExpr ::  G.Expr -> Result TypeOfResult
 transExpr x = case x of
@@ -225,7 +243,7 @@ transExpr x = case x of
                   _ -> do
                     (st,l,funcMem) <- get
                     let (fun, env) = fromMaybe (error "undefined function") (M.lookup id funcMem)
-                    local (\e -> env) (transAppFunc fun)
+                    local (\e -> env) (transAppFunc fun exprs)
                      -- zmienic localnie srodowisko na sprzed deklaracji funkcji 
                     return $ MyInt 0
                     
