@@ -4,12 +4,12 @@ import qualified AbsGramar as G
 import qualified Data.Map as M
 import Control.Monad.Reader
 import Control.Monad.State
-import Data.Maybe(fromMaybe)
+import Data.Maybe(fromMaybe, Maybe(..))
 import Control.Monad.Except
 import Control.Exception (Exception)
 
 import Prelude
-  ( ($), (.)
+  ( ($), (.) 
   , Bool(..), (==), (<), (<=), (>), (>=), (/=), not, (&&), (||)
   , Int, Integer, Double, (+), (-), (*), (/)
   , String, (++), print
@@ -91,7 +91,7 @@ transFnDef x = case x of
         id <- transIdent ident
         env <- ask
         case id of
-          "main" -> transBlock block 
+          "main" -> transBlock block >> return ()
           _ -> do
             modifyFuncMem(M.insert id (x, env))
 
@@ -101,9 +101,15 @@ transArg x = case x of
   G.Arg _ type_ ident -> failure x
   G.ArgRef _ type_ ident -> failure x
 
-transBlock ::  G.Block -> Result()
+transBlockWithRet ::  G.Block -> Result TypeOfResult
+transBlockWithRet x = case x of
+  G.Block _ stmts -> do
+    Just ret <- transStmts stmts -- tu jakis local chyba
+    return ret
+
+transBlock ::  G.Block -> Result ()
 transBlock x = case x of
-  G.Block _ stmts -> transStmts stmts -- tu jakis local chyba
+  G.Block _ stmts -> transStmts stmts >> return ()
 
 -- typechekcer zapewnia ze tu bedzie int
 incResult :: TypeOfResult -> TypeOfResult
@@ -113,13 +119,13 @@ decResult :: TypeOfResult -> TypeOfResult
 decResult (MyInt n) = MyInt (n - 1)
 
 
-transStmts ::  [G.Stmt ] -> Result()
-transStmts [] = return ()
+transStmts ::  [G.Stmt ] -> Result (Maybe TypeOfResult)
+transStmts [] = return Nothing
 transStmts (x:xs) = case x of
 
-  G.Empty _ -> return ()
+  G.Empty _ -> return Nothing
 
-  G.BStmt _ block -> failure x
+  G.BStmt _ block -> return Nothing
   
   G.Decl _ topdef -> case topdef of
     
@@ -132,6 +138,7 @@ transStmts (x:xs) = case x of
             let i = MyInt 0
             modifyMem (M.insert l i)
             local (M.insert id l) (transStmts xs)
+            return Nothing
 
           G.Init _ ident expr -> do
             e <- transExpr expr
@@ -139,6 +146,7 @@ transStmts (x:xs) = case x of
             id <- transIdent ident
             modifyMem (M.insert l e)
             local (M.insert id l) (transStmts xs)
+            return Nothing
 
   -- zakładając ze zmienna byla wczesniej zadeklarowana
   G.Ass _ ident expr -> do
@@ -148,6 +156,7 @@ transStmts (x:xs) = case x of
           w <- transExpr expr
           modifyMem $ M.insert l w
           transStmts xs
+          return Nothing
 
   G.Incr _ ident -> do
           env <- ask
@@ -155,6 +164,7 @@ transStmts (x:xs) = case x of
           let l = fromMaybe (error "undefined variable") (M.lookup id env) -- ten błąd powinien zglaszac typechecker
           modifyMem $ \mem -> M.adjust incResult l mem
           transStmts xs
+          return Nothing
 
 
   G.Decr _ ident -> do
@@ -163,14 +173,18 @@ transStmts (x:xs) = case x of
           let l = fromMaybe (error "undefined variable") (M.lookup id env) -- ten błąd powinien zglaszac typechecker
           modifyMem $ \mem -> M.adjust decResult l mem
           transStmts xs
+          return Nothing
 
-  G.Ret _ expr -> undefined
+  G.Ret _ expr -> do 
+            e <- transExpr expr
+            return $ Just e
           
-  G.VRet _ ->undefined
+  G.VRet _ -> return $ Just (MyBool True)
 
   G.Cond _ expr block -> do
           MyBool e <- transExpr expr
           if e==True then transBlock block >> transStmts xs else transStmts xs
+          
 
 
   G.CondElse _ expr block1 block2 -> do
@@ -200,14 +214,14 @@ transType x = case x of
 
 -- co z funkcjami ktore cos zwracaja? jak tą wartosc tam wrócic, na razie zajmijmy sie void
 -- i olewam argumenty
-transAppFunc :: G.FnDef -> [G.Expr] -> Result ()
-transAppFunc x expr = case x of
-  G.FnDef _ type_ ident args block -> doFunc args expr block
+transAppFunc :: G.FnDef -> [G.Expr] -> Env -> Result TypeOfResult
+transAppFunc x expr env = case x of
+  G.FnDef _ type_ ident args block -> local (\e -> env) (doFunc args expr block)
 
 -- typechecker bedzie sprawdzal czy podane expr sa dobrego typu
 --insertArg [] [] = local () ()
-doFunc :: [G.Arg] -> [G.Expr] -> G.Block -> Result ()
-doFunc [] [] block =  transBlock block
+doFunc :: [G.Arg] -> [G.Expr] -> G.Block -> Result TypeOfResult
+doFunc [] [] block =  transBlockWithRet block
 doFunc (arg:args) (expr:exprs) block = do
               e <- transExpr expr
               case arg of
@@ -243,9 +257,9 @@ transExpr x = case x of
                   _ -> do
                     (st,l,funcMem) <- get
                     let (fun, env) = fromMaybe (error "undefined function") (M.lookup id funcMem)
-                    local (\e -> env) (transAppFunc fun exprs)
+                    transAppFunc fun exprs env
                      -- zmienic localnie srodowisko na sprzed deklaracji funkcji 
-                    return $ MyInt 0
+                    
                     
   G.EString _ string -> return $ MyStr string
 
