@@ -24,7 +24,6 @@ data TypeOfResult = MyInt Integer
   deriving (Show)
 
 
-
 type Loc = Int -- lokacje pamieci
 type Env = M.Map String Loc
 type Mem  = M.Map Loc TypeOfResult
@@ -33,9 +32,6 @@ type Store = (Mem, Loc, FuncMem)
 --type Store = (Mem, Loc)
 
 type Result a = ExceptT String (StateT Store (ReaderT Env IO)) a
-
-failure :: Show a => a -> Result ()
-failure x = throwError $ "x " ++ show x
 
 -- rezerwacja nowej lokacji
 newloc :: Result Loc
@@ -95,11 +91,12 @@ transFnDef x = case x of
           _ -> do
             modifyFuncMem(M.insert id (x, env))
 
-
+{-
 transArg :: G.Arg -> Result ()
 transArg x = case x of
   G.Arg _ type_ ident -> failure x
   G.ArgRef _ type_ ident -> failure x
+-}
 
 transBlockWithRet ::  G.Block -> Result TypeOfResult
 transBlockWithRet x = case x of
@@ -138,7 +135,6 @@ transStmts (x:xs) = case x of
             let i = MyInt 0
             modifyMem (M.insert l i)
             local (M.insert id l) (transStmts xs)
-            return Nothing
 
           G.Init _ ident expr -> do
             e <- transExpr expr
@@ -146,7 +142,6 @@ transStmts (x:xs) = case x of
             id <- transIdent ident
             modifyMem (M.insert l e)
             local (M.insert id l) (transStmts xs)
-            return Nothing
 
   -- zakładając ze zmienna byla wczesniej zadeklarowana
   G.Ass _ ident expr -> do
@@ -156,7 +151,6 @@ transStmts (x:xs) = case x of
           w <- transExpr expr
           modifyMem $ M.insert l w
           transStmts xs
-          return Nothing
 
   G.Incr _ ident -> do
           env <- ask
@@ -164,7 +158,6 @@ transStmts (x:xs) = case x of
           let l = fromMaybe (error "undefined variable") (M.lookup id env) -- ten błąd powinien zglaszac typechecker
           modifyMem $ \mem -> M.adjust incResult l mem
           transStmts xs
-          return Nothing
 
 
   G.Decr _ ident -> do
@@ -173,7 +166,6 @@ transStmts (x:xs) = case x of
           let l = fromMaybe (error "undefined variable") (M.lookup id env) -- ten błąd powinien zglaszac typechecker
           modifyMem $ \mem -> M.adjust decResult l mem
           transStmts xs
-          return Nothing
 
   G.Ret _ expr -> do 
             e <- transExpr expr
@@ -200,10 +192,12 @@ transStmts (x:xs) = case x of
   G.Break _ -> undefined
   G.Continue _ -> undefined
 
+{-
 transItem ::  G.Item -> Result()
 transItem x = case x of
   G.NoInit _ ident -> failure x
   G.Init _ ident expr -> failure x
+
 
 transType ::  G.Type -> Result()
 transType x = case x of
@@ -211,19 +205,19 @@ transType x = case x of
   G.MyStr _ -> failure x
   G.MyBool _ -> failure x
   G.MyVoid _ -> failure x
+  -}
 
 -- co z funkcjami ktore cos zwracaja? jak tą wartosc tam wrócic, na razie zajmijmy sie void
 -- i olewam argumenty
-transAppFunc :: G.FnDef -> [G.Expr] -> Env -> Result TypeOfResult
+transAppFunc :: G.FnDef -> [TypeOfResult] -> Env -> Result TypeOfResult
 transAppFunc x expr env = case x of
   G.FnDef _ type_ ident args block -> local (\e -> env) (doFunc args expr block)
 
 -- typechecker bedzie sprawdzal czy podane expr sa dobrego typu
 --insertArg [] [] = local () ()
-doFunc :: [G.Arg] -> [G.Expr] -> G.Block -> Result TypeOfResult
+doFunc :: [G.Arg] -> [TypeOfResult] -> G.Block -> Result TypeOfResult
 doFunc [] [] block =  transBlockWithRet block
-doFunc (arg:args) (expr:exprs) block = do
-              e <- transExpr expr
+doFunc (arg:args) (e:exprs) block = do
               case arg of
 
                 G.Arg _ type_ ident -> do
@@ -233,6 +227,14 @@ doFunc (arg:args) (expr:exprs) block = do
                               local (M.insert id l) (doFunc args exprs block)
 
                 G.ArgRef _ type_ ident -> undefined
+
+prettyPrint :: [TypeOfResult] -> String
+prettyPrint [] = ""
+prettyPrint (x:xs) = case x of
+                MyInt i -> show i ++ prettyPrint xs
+                MyBool i -> show i ++ prettyPrint xs
+                MyStr i -> i ++ prettyPrint xs
+
 
 transExpr ::  G.Expr -> Result TypeOfResult
 transExpr x = case x of
@@ -252,13 +254,12 @@ transExpr x = case x of
                 id <- transIdent ident
                 case id of
                   "print" -> do
-                            liftIO $ mapM_ print e
+                            liftIO $ putStrLn (prettyPrint e)
                             return $ MyBool True
                   _ -> do
                     (st,l,funcMem) <- get
                     let (fun, env) = fromMaybe (error "undefined function") (M.lookup id funcMem)
-                    transAppFunc fun exprs env
-                     -- zmienic localnie srodowisko na sprzed deklaracji funkcji 
+                    transAppFunc fun e env
                     
                     
   G.EString _ string -> return $ MyStr string
