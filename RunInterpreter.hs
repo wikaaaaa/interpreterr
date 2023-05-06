@@ -25,6 +25,7 @@ import PrintGramar ( Print, printTree )
 import SkelGramar  ()
 
 import Interpreter
+import TypeChecker
 
 type Err        = Either String
 type ParseFun a = [Token] -> Err a
@@ -48,8 +49,10 @@ run v p s =
     Right tree -> do
       putStrLn "\nParse Successful!"
       showTree v tree
-      putStrLn "\nWynik:"
-      runInterpreter tree
+      putStrLn "\n________________________"
+      case runTypeChecker tree of
+        Left error -> putStrLn $ "\nerror\n" ++ error
+        Right _ -> runInterpreter tree
 
   where
   ts = myLexer s
