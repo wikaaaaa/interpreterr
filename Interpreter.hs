@@ -11,7 +11,7 @@ import Control.Exception (Exception)
 import Prelude
   ( ($), (.) 
   , Bool(..), (==), (<), (<=), (>), (>=), (/=), not, (&&), (||)
-  , Int, Integer, Double, (+), (-), (*), (/)
+  , Int, Integer, Double, (+), (-), (*), div, mod
   , String, (++), print
   , ShowS, showChar, showString
   , all, elem, foldr, id, map, null, replicate, shows, span, Show,  Either(..), IO, show, error, undefined, putStrLn, fst, putStr
@@ -91,12 +91,7 @@ transFnDef x = case x of
           _ -> do
             modifyFuncMem(M.insert id (x, env))
 
-{-
-transArg :: G.Arg -> Result ()
-transArg x = case x of
-  G.Arg _ type_ ident -> failure x
-  G.ArgRef _ type_ ident -> failure x
--}
+
 
 transBlockWithRet ::  G.Block -> Result TypeOfResult
 transBlockWithRet x = case x of
@@ -192,41 +187,44 @@ transStmts (x:xs) = case x of
   G.Break _ -> undefined
   G.Continue _ -> undefined
 
-{-
-transItem ::  G.Item -> Result()
-transItem x = case x of
-  G.NoInit _ ident -> failure x
-  G.Init _ ident expr -> failure x
 
-
-transType ::  G.Type -> Result()
-transType x = case x of
-  G.MyInt _ -> failure x
-  G.MyStr _ -> failure x
-  G.MyBool _ -> failure x
-  G.MyVoid _ -> failure x
-  -}
+-- mapa z argumentami
 
 -- co z funkcjami ktore cos zwracaja? jak tą wartosc tam wrócic, na razie zajmijmy sie void
 -- i olewam argumenty
-transAppFunc :: G.FnDef -> [TypeOfResult] -> Env -> Result TypeOfResult
+transAppFunc :: G.FnDef -> [G.Expr] -> Env -> Result TypeOfResult
 transAppFunc x expr env = case x of
-  G.FnDef _ type_ ident args block -> local (\e -> env) (doFunc args expr block)
-
+  G.FnDef _ type_ ident args block -> do
+                      new_env <- doFunc args expr env
+                      local (\e -> new_env) (transBlockWithRet block)
+                      
 -- typechecker bedzie sprawdzal czy podane expr sa dobrego typu
 --insertArg [] [] = local () ()
-doFunc :: [G.Arg] -> [TypeOfResult] -> G.Block -> Result TypeOfResult
-doFunc [] [] block =  transBlockWithRet block
-doFunc (arg:args) (e:exprs) block = do
+doFunc :: [G.Arg] -> [G.Expr] -> Env -> Result Env
+doFunc [] [] env = return env
+doFunc (arg:args) (expr:exprs) env = do
               case arg of
 
                 G.Arg _ type_ ident -> do
+                              e <- transExpr expr
                               id <- transIdent ident
                               l <- newloc
                               modifyMem (M.insert l e)
-                              local (M.insert id l) (doFunc args exprs block)
+                              let new_env = M.insert id l env
+                              doFunc args exprs new_env
 
-                G.ArgRef _ type_ ident -> undefined
+                -- typechecker zapewni ze jesli jest referecja to podana zostala zmienna juz zadeklarowana wczensniej
+                -- expr to E.Var
+                G.ArgRef _ type_ ident -> do 
+                              new_id <- transIdent ident
+                              let G.EVar _ old_ident = expr
+                              old_id <- transIdent old_ident
+                              old_env <- ask
+                              let l = fromMaybe (error "undefined variable") (M.lookup old_id old_env)
+                              let new_env = M.insert new_id l env
+                              doFunc args exprs new_env
+
+
 
 prettyPrint :: [TypeOfResult] -> String
 prettyPrint [] = ""
@@ -259,7 +257,7 @@ transExpr x = case x of
                   _ -> do
                     (st,l,funcMem) <- get
                     let (fun, env) = fromMaybe (error "undefined function") (M.lookup id funcMem)
-                    transAppFunc fun e env
+                    local (\e -> e) (transAppFunc fun exprs env)
                     
                     
   G.EString _ string -> return $ MyStr string
@@ -308,8 +306,8 @@ transAddOp x = case x of
 transMulOp :: G.MulOp -> Result (Integer -> Integer -> Integer)
 transMulOp x = case x of
   G.Times _ -> return (*)
-  G.Div _ -> undefined
-  G.Mod _ -> undefined
+  G.Div _ -> return div
+  G.Mod _ -> return mod
 
 transRelOp :: G.RelOp -> Result(Integer -> Integer -> Bool)
 transRelOp x = case x of
