@@ -20,6 +20,13 @@ import Control.Monad.Except
 data Type = MyInt | MyBool | MyStr | MyVoid | MyFunc Type [Type]
     deriving(Eq)
 
+instance Show Type where
+  show (MyInt) = "int"
+  show (MyBool) = "bool"
+  show (MyStr) = "string"
+  show (MyVoid) = "void"
+  show (MyFunc t1 t2) = "function (" ++ show t2  ++ show t1 ++ ")"
+
 
 
 data Env = Env { 
@@ -29,6 +36,18 @@ data Env = Env {
 }
 
 type Result a = ExceptT String (Reader Env) a
+
+data MyError = ErrorTypeMismatch Type Type G.BNFC'Position 
+             | ErrorUndefinedVariable String G.BNFC'Position
+             | ErrorUninitializedVariable String G.BNFC'Position
+
+printPos Nothing = ""
+printPos (Just (l,c)) = " at line " ++ show l ++ ", column " ++ show c
+
+instance Show MyError where
+  show (ErrorTypeMismatch expected actual pos) = "TypesMismatchError \n expected type: " ++ show expected ++ ", actual type: " ++ show actual ++ printPos pos
+  show (ErrorUndefinedVariable name pos) = "UndefinedVariableError\n undefined variable " ++ name ++  printPos pos
+  show (ErrorUninitializedVariable name pos) = "UninitializedError\n unitialized variable " ++ name ++  printPos pos
 
 
 transIdent :: G.Ident -> Result String
@@ -55,19 +74,27 @@ transTopDefs (y:ys) = case y of
         local (\e -> e { varType = M.insert id i (varType e) }) (transTopDefs ys)
 
 
-      G.Init _ ident expr -> do
+      G.Init pos ident expr -> do
         e <- transExpr expr
         id <- transIdent ident
         t <- transType type_
         let i = (t, True)
-        when (e /= t) $ throwError $ "error"
+        when (e /= t) $ throwError $ show $ ErrorTypeMismatch t e pos
         local (\e -> e { varType = M.insert id i (varType e) }) (transTopDefs ys)
 
 
 transExpr ::  G.Expr -> Result Type
 transExpr x = case x of
-  G.EVar _ ident -> undefined
-              
+  G.EVar pos ident -> do
+          id <- transIdent ident
+          env <- ask
+          let i = M.lookup id (varType env)
+          case i of
+            Nothing -> throwError $ show $ ErrorUndefinedVariable id pos
+            Just (t, initialized) -> case initialized of
+                            False -> throwError $ show $ ErrorUninitializedVariable id pos 
+                            True -> return t 
+          
 
   G.ELitInt _ integer -> return MyInt
   G.ELitTrue _ -> return MyBool
@@ -103,18 +130,13 @@ transType x = case x of
 
 runEnvR r = runReader r Env { varType = M.empty, retType = Nothing, ret = False } 
 
-runTCM :: Result a -> Either String a
-runTCM t = runEnvR $ runExceptT t
+runResult :: Result a -> Either String a
+runResult t = runEnvR $ runExceptT t
 
---runExceptT :: TCM a -> Reader Env (Either String a)
-
-typeOf1 :: G.Program -> Result Type
-typeOf1 exp = catchError (transProgram exp) handler where
-  handler e = throwError $ 
-    "Type error in\n"
-    ++show exp++"\n"
-    ++e
+typechecker :: G.Program -> Result Type
+typechecker exp = catchError (transProgram exp) handler where
+  handler e = throwError $ e
 
 runTypeChecker :: G.Program -> Either String Type    
-runTypeChecker exp = runTCM (typeOf1 exp)
+runTypeChecker exp = runResult (typechecker exp)
 

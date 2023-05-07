@@ -51,7 +51,7 @@ run v p s =
       showTree v tree
       putStrLn "\n________________________"
       case runTypeChecker tree of
-        Left error -> putStrLn $ "\nerror\n" ++ error
+        Left error -> putStrLn $ "\nTypeChecker found error:\n" ++ error
         Right _ -> runInterpreter tree
 
   where
