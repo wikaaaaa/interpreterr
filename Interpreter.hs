@@ -33,6 +33,16 @@ type Store = (Mem, Loc, FuncMem)
 
 type Result a = ExceptT String (StateT Store (ReaderT Env IO)) a
 
+data MyError = ErrorUninitializedVariable String G.BNFC'Position
+
+printPos Nothing = ""
+printPos (Just (l,c)) = " at line " ++ show l ++ ", column " ++ show c
+
+instance Show MyError where
+  show (ErrorUninitializedVariable name pos) = "UninitializedError\n unitialized variable " ++ name ++  printPos pos
+-- throwError $ show $ ErrorUninitializedVariable id pos 
+
+
 -- rezerwacja nowej lokacji
 newloc :: Result Loc
 newloc = do
@@ -69,8 +79,8 @@ transTopDefs (y:ys) = case y of
       G.NoInit _ ident -> do
         l <- newloc
         id <- transIdent ident
-        let i = MyInt 0
-        modifyMem (M.insert l i)
+        --let i = MyInt 0
+        -- modifyMem (M.insert l i)
         local (M.insert id l) (transTopDefs ys)
 
 
@@ -127,8 +137,8 @@ transStmts (x:xs) = case x of
           G.NoInit _ ident -> do
             l <- newloc
             id <- transIdent ident
-            let i = MyInt 0
-            modifyMem (M.insert l i)
+            --let i = MyInt 0
+            --modifyMem (M.insert l i)
             local (M.insert id l) (transStmts xs)
 
           G.Init _ ident expr -> do
@@ -147,19 +157,27 @@ transStmts (x:xs) = case x of
           modifyMem $ M.insert l w
           transStmts xs
 
-  G.Incr _ ident -> do
+  G.Incr pos ident -> do
           env <- ask
           id <- transIdent ident
           let l = fromMaybe (error "undefined variable") (M.lookup id env) -- ten błąd powinien zglaszac typechecker
-          modifyMem $ \mem -> M.adjust incResult l mem
+          (st,_,_)  <- get
+          let val = M.lookup l st
+          case val of
+              Nothing -> throwError $ show $ ErrorUninitializedVariable id pos
+              Just v -> modifyMem $ \mem -> M.adjust incResult l mem
           transStmts xs
 
 
-  G.Decr _ ident -> do
+  G.Decr pos ident -> do
           env <- ask
           id <- transIdent ident
           let l = fromMaybe (error "undefined variable") (M.lookup id env) -- ten błąd powinien zglaszac typechecker
-          modifyMem $ \mem -> M.adjust decResult l mem
+          (st,_,_)  <- get
+          let val = M.lookup l st
+          case val of
+              Nothing -> throwError $ show $ ErrorUninitializedVariable id pos
+              Just v -> modifyMem $ \mem -> M.adjust decResult l mem
           transStmts xs
 
   G.Ret _ expr -> do 
@@ -236,12 +254,15 @@ prettyPrint (x:xs) = case x of
 
 transExpr ::  G.Expr -> Result TypeOfResult
 transExpr x = case x of
-  G.EVar _ ident -> do
+  G.EVar pos ident -> do
               env <- ask
               id <-  transIdent ident
               let l = fromMaybe (error "undefined variable") (M.lookup id env)
               (st,_,_)  <- get
-              return $ fromMaybe (error "undefined location") (M.lookup l st)
+              let val = M.lookup l st
+              case val of
+                Nothing -> throwError $ show $ ErrorUninitializedVariable id pos
+                Just v -> return v
 
   G.ELitInt _ integer -> return $ MyInt integer
   G.ELitTrue _ -> return $ MyBool True
@@ -331,7 +352,7 @@ runInterpreter program =
     in do 
     (res, a) <- runReaderT (runStateT (runExceptT (interpret program)) newState) newEnv
     case res of
-      Left e -> putStrLn $ "runtime error: " ++ e
+      Left e -> putStrLn $ "runtime error: \n" ++ e
       Right f -> mapM_ wypisz $ M.toList $ first $ a
           where 
             wypisz (l, i) = do {putStr $ (show l)++", "; putStrLn $ show i}  

@@ -17,7 +17,7 @@ import Control.Monad.Reader
 import Control.Monad.Except
 
 
-data Type = MyInt | MyBool | MyStr | MyVoid
+data Type = MyInt | MyBool | MyStr | MyVoid | MyFunc Type [Type]
     deriving(Eq)
 
 instance Show Type where
@@ -25,10 +25,10 @@ instance Show Type where
   show (MyBool) = "bool"
   show (MyStr) = "string"
   show (MyVoid) = "void"
+  show (MyFunc t1 t2) = "function (" ++ show t2 ++ show t1 ++ ")"
 
 data Env = Env { 
-    varType :: M.Map String (Type, Bool), -- bool = czy zainicjalizowana
-    funcType ::  M.Map String (G.FnDef, Env),
+    varType :: M.Map String Type, 
     retType :: Maybe Type,
     ret :: Bool
 }
@@ -37,7 +37,13 @@ type Result a = ExceptT String (Reader Env) a
 
 data MyError = ErrorTypeMismatch Type Type G.BNFC'Position 
              | ErrorUndefinedVariable String G.BNFC'Position
-             | ErrorUninitializedVariable String G.BNFC'Position
+             | ErrorNoReturn String G.BNFC'Position
+             | ErrorReturnTypeMismatch String Type Type G.BNFC'Position
+             | ErrorUndefinedFunction String G.BNFC'Position
+             | ErrorArgumentTypeMismatch String Int Type Type G.BNFC'Position
+             | ErrorTooFewArguments String G.BNFC'Position
+             | ErrorTooManyArguments String G.BNFC'Position
+
 
 printPos Nothing = ""
 printPos (Just (l,c)) = " at line " ++ show l ++ ", column " ++ show c
@@ -45,8 +51,14 @@ printPos (Just (l,c)) = " at line " ++ show l ++ ", column " ++ show c
 instance Show MyError where
   show (ErrorTypeMismatch expected actual pos) = "TypesMismatchError \n expected type: " ++ show expected ++ ", actual type: " ++ show actual ++ printPos pos
   show (ErrorUndefinedVariable name pos) = "UndefinedVariableError\n undefined variable " ++ name ++  printPos pos
-  show (ErrorUninitializedVariable name pos) = "UninitializedError\n unitialized variable " ++ name ++  printPos pos
-
+  show (ErrorNoReturn name pos) = "NoReturnError\n Funtion " ++ name ++ " declared "  ++ printPos pos ++ " has no return statement"
+  show (ErrorReturnTypeMismatch name expected actual pos) = "ReturnTypeMismatchError \n Wrong type of the returned value in function " ++ name ++ " declared "++ printPos pos
+                                                             ++ "\n expected type: " ++ show expected ++ ", actual type: " ++ show actual 
+  show (ErrorUndefinedFunction name pos) = "UndefinedFunctionError\n undefined function " ++ name ++  printPos pos
+  show (ErrorArgumentTypeMismatch name numb expected actual pos) = "ArgumentTypeMismatchError \n Wrong type of argument number " ++ show numb ++  " in application of function " ++ name ++ printPos pos
+                                                             ++ "\n expected type: " ++ show expected ++ ", actual type: " ++ show actual 
+  show (ErrorTooFewArguments name pos) = "TooFewArgumentsError\n too few arguments in application of function " ++ name ++ printPos pos
+  show (ErrorTooManyArguments name pos) = "TooManyArgumentsError\n too many arguments in application of function " ++ name ++ printPos pos
 
 transIdent :: G.Ident -> Result String
 transIdent x = case x of
@@ -56,9 +68,45 @@ transProgram ::  G.Program -> Result Type
 transProgram x = case x of
   G.Program _ topdefs -> transTopDefs topdefs
 
+
+transBlockWithRet ::  G.Block -> String -> G.BNFC'Position -> Result Type
+transBlockWithRet x name pos = case x of
+  G.Block _ stmts -> do
+    ret <- transStmts stmts
+    case ret of
+      Nothing -> throwError $ show $ ErrorNoReturn name pos
+      Just r -> return r
+
 transBlock ::  G.Block -> Result Type
 transBlock x = case x of
   G.Block _ stmts -> transStmts stmts >> return MyVoid
+
+transArg :: [G.Arg] -> [Type] -> Result [Type]
+transArg [] res = return res
+transArg (x:xs) res = do
+    case x of
+      G.Arg _ type_ ident -> do
+        t <- transType type_
+        transArg xs (res ++ [t]) 
+      G.ArgRef _ type_ ident -> do
+        t <- transType type_
+        transArg xs (res ++ [t])
+
+
+addArgToEnv :: [G.Arg] -> Env -> Result Env
+addArgToEnv [] env = return env
+addArgToEnv (x:xs) e = do
+      case x of 
+        G.Arg _ type_ ident -> do
+              t <- transType type_
+              id <- transIdent ident
+              let new_env = e { varType = M.insert id t (varType e) }
+              addArgToEnv xs new_env
+        G.ArgRef _ type_ ident -> do
+              t <- transType type_
+              id <- transIdent ident  
+              let new_env = e { varType = M.insert id t (varType e) }
+              addArgToEnv xs new_env
 
 transTopDefs :: [G.TopDef] -> Result Type
 transTopDefs [] = return MyVoid
@@ -70,25 +118,28 @@ transTopDefs (y:ys) = case y of
                 "main" -> transBlock block >> return MyVoid
                 _ -> do
                   env <- ask
-                  let f = (G.FnDef pos type_ ident args block)
-                  local (\e -> e { funcType = M.insert id (f, env) (funcType e) }) (transTopDefs ys)
+                  new_env <- addArgToEnv args env
+                  returned_type <- local (\e -> new_env) (transBlockWithRet block id pos)
+                  ret_type <- transType type_
+                  when (returned_type /= ret_type) $ throwError $ show $ ErrorReturnTypeMismatch id ret_type returned_type pos
+                  args_type <- transArg args []
+                  let res = MyFunc ret_type args_type
+                  local (\e -> e { varType = M.insert id res (varType e) }) (transTopDefs ys)
 
      
     G.VarDef _ type_ item -> case item of
       G.NoInit _ ident -> do
         id <- transIdent ident
         t <- transType type_
-        let i = (t, False)
-        local (\e -> e { varType = M.insert id i (varType e) }) (transTopDefs ys)
+        local (\e -> e { varType = M.insert id t (varType e) }) (transTopDefs ys)
 
 
       G.Init pos ident expr -> do
         e <- transExpr expr
         id <- transIdent ident
         t <- transType type_
-        let i = (t, True)
         when (e /= t) $ throwError $ show $ ErrorTypeMismatch t e pos
-        local (\e -> e { varType = M.insert id i (varType e) }) (transTopDefs ys)
+        local (\e -> e { varType = M.insert id t (varType e) }) (transTopDefs ys)
 
 
 transStmts ::  [G.Stmt ] -> Result (Maybe Type)
@@ -107,17 +158,15 @@ transStmts (x:xs) = case x of
           G.NoInit _ ident -> do
             id <- transIdent ident
             t <- transType type_
-            let i = (t, False)
-            local (\e -> e { varType = M.insert id i (varType e) }) (transStmts xs)
+            local (\e -> e { varType = M.insert id t (varType e) }) (transStmts xs)
 
 
           G.Init pos ident expr -> do
             e <- transExpr expr
             id <- transIdent ident
             t <- transType type_
-            let i = (t, True)
             when (e /= t) $ throwError $ show $ ErrorTypeMismatch t e pos
-            local (\e -> e { varType = M.insert id i (varType e) }) (transStmts xs)
+            local (\e -> e { varType = M.insert id t (varType e) }) (transStmts xs)
 
   -- zakładając ze zmienna byla wczesniej zadeklarowana
   G.Ass pos ident expr -> do
@@ -127,9 +176,9 @@ transStmts (x:xs) = case x of
           let i = M.lookup id (varType env)
           case i of
             Nothing -> throwError $ show $ ErrorUndefinedVariable id pos
-            Just (tt, initialized) -> do
+            Just tt -> do
                 when (tt /= t) $ throwError $ show $ ErrorTypeMismatch tt t pos
-                local (\e -> e { varType = M.insert id (t, True) (varType e) }) (transStmts xs)
+                transStmts xs
               
 
   G.Incr pos ident -> do
@@ -138,11 +187,9 @@ transStmts (x:xs) = case x of
           let i = M.lookup id (varType env)
           case i of
             Nothing -> throwError $ show $ ErrorUndefinedVariable id pos
-            Just (tt, initialized) -> case initialized of
-                            False -> throwError $ show $ ErrorUninitializedVariable id pos 
-                            True -> do
-                              when (tt /= MyInt) $ throwError $ show $ ErrorTypeMismatch MyInt tt pos
-                              transStmts xs
+            Just tt -> do
+                        when (tt /= MyInt) $ throwError $ show $ ErrorTypeMismatch MyInt tt pos
+                        transStmts xs
                                 
 
   G.Decr pos ident -> do
@@ -151,14 +198,13 @@ transStmts (x:xs) = case x of
           let i = M.lookup id (varType env)
           case i of
             Nothing -> throwError $ show $ ErrorUndefinedVariable id pos
-            Just (tt, initialized) -> case initialized of
-                            False -> throwError $ show $ ErrorUninitializedVariable id pos 
-                            True -> do
-                              when (tt /= MyInt) $ throwError $ show $ ErrorTypeMismatch MyInt tt pos
-                              transStmts xs
+            Just tt -> do
+                        when (tt /= MyInt) $ throwError $ show $ ErrorTypeMismatch MyInt tt pos
+                        transStmts xs
 
   G.Ret _ expr -> do 
             e <- transExpr expr
+            -- sprawdzic czy return jest ostatnia operacja w bloku?
             -- sprawdzenie czy zwracany tym sie zgadza eh
             return $ Just e
           
@@ -167,20 +213,20 @@ transStmts (x:xs) = case x of
   G.Cond pos expr block -> do
           e <- transExpr expr
           when (e /= MyBool) $ throwError $ show $ ErrorTypeMismatch MyBool e pos
-          local(\env->env)(transBlock block)
+          transBlock block
           transStmts xs
           
   G.CondElse pos expr block1 block2 -> do
           e <- transExpr expr
           when (e /= MyBool) $ throwError $ show $ ErrorTypeMismatch MyBool e pos
-          local(\env->env)(transBlock block2) 
-          local(\env->env)(transBlock block1)
+          transBlock block2
+          transBlock block1
           transStmts xs
 
   G.While pos expr block -> do
           e <- transExpr expr
           when (e /= MyBool) $ throwError $ show $ ErrorTypeMismatch MyBool e pos
-          local(\env->env)(transBlock block)
+          transBlock block
           transStmts xs
 
   G.SExp _ expr -> transExpr expr >> transStmts xs -- aplikacja funkcji
@@ -200,6 +246,14 @@ ensureMyStr pos expr = do
         t <- transExpr expr
         when (t /= MyStr) $ throwError $ show $ ErrorTypeMismatch MyStr t pos
 
+checkArgs :: [Type] -> [Type] -> String -> G.BNFC'Position -> Int -> Result ()
+checkArgs [] [] name pos i = return ()
+checkArgs a [] name pos i = throwError $ show $ ErrorTooFewArguments name pos 
+checkArgs [] a name pos i = throwError $ show $ ErrorTooManyArguments name pos 
+checkArgs (arg:args) (expr:exprs) name pos i = do
+        when (arg /= expr) $ throwError $ show $ ErrorArgumentTypeMismatch name i arg expr pos 
+        checkArgs args exprs name pos (i+1)
+
 transExpr ::  G.Expr -> Result Type
 transExpr x = case x of
   G.EVar pos ident -> do
@@ -208,16 +262,28 @@ transExpr x = case x of
           let i = M.lookup id (varType env)
           case i of
             Nothing -> throwError $ show $ ErrorUndefinedVariable id pos
-            Just (t, initialized) -> case initialized of
-                            False -> throwError $ show $ ErrorUninitializedVariable id pos 
-                            True -> return t 
+            Just t -> return t 
           
 
   G.ELitInt _ integer -> return MyInt
   G.ELitTrue _ -> return MyBool
   G.ELitFalse _ -> return MyBool
 
-  G.EApp _pos ident exprs -> undefined
+  G.EApp pos ident exprs -> do
+              e <- mapM transExpr exprs
+              id <- transIdent ident
+              case id of
+                  "print" -> return $ MyVoid
+                  _ -> do
+                    env <- ask
+                    let i = M.lookup id (varType env)
+                    case i of
+                        Nothing -> throwError $ show $ ErrorUndefinedFunction id pos
+                        Just val -> case val of
+                            MyFunc ret args -> do
+                                checkArgs args e id pos 1
+                                return ret
+                            _ -> undefined
 
   G.EString pos string -> return MyStr
 
@@ -264,7 +330,7 @@ transType x = case x of
 
 
 
-runEnvR r = runReader r Env { varType = M.empty, funcType = M.empty, retType = Nothing, ret = False } 
+runEnvR r = runReader r Env { varType = M.empty, retType = Nothing, ret = False } 
 
 runResult :: Result a -> Either String a
 runResult t = runEnvR $ runExceptT t
