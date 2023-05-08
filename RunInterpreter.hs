@@ -35,23 +35,23 @@ putStrV :: Verbosity -> String -> IO ()
 putStrV v s = when (v > 1) $ putStrLn s
 
 --runFile :: (Print a, Show a) => Verbosity -> ParseFun a -> FilePath -> IO ()
-runFile v p f = putStrLn f >> readFile f >>= run v p
+runFile v p f = readFile f >>= run v p
 
 --run :: (Print a, Show a) => Verbosity -> ParseFun a -> String -> IO ()
 run v p s =
   case p ts of
     Left err -> do
-      putStrLn "\nParse              Failed...\n"
-      putStrV v "Tokens:"
-      mapM_ (putStrV v . showPosToken . mkPosToken) ts
+      --putStrLn "\nParse              Failed...\n"
+      --putStrV v "Tokens:"
+      --mapM_ (putStrV v . showPosToken . mkPosToken) ts
       putStrLn err
       exitFailure
     Right tree -> do
-      putStrLn "\nParse Successful!"
-      showTree v tree
-      putStrLn "\n________________________"
+      --putStrLn "\nParse Successful!"
+      --showTree v tree
+      --putStrLn "\n________________________"
       case runTypeChecker tree of
-        Left error -> putStrLn $ "\nTypeChecker found error:\n" ++ error
+        Left error -> putStrLn $ "\nTypeChecker error: " ++ error
         Right _ -> runInterpreter tree
 
   where

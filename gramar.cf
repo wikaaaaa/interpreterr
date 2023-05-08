@@ -26,8 +26,6 @@ separator  Stmt "" ;
 
 Empty.     Stmt ::= ";" ;
 
-BStmt.     Stmt ::= Block ;
-
 Decl.      Stmt ::= TopDef ;
 
 NoInit.    Item ::= Ident ;

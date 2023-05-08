@@ -125,8 +125,6 @@ transStmts [] = return Nothing
 transStmts (x:xs) = case x of
 
   G.Empty _ -> return Nothing
-
-  G.BStmt _ block -> return undefined
   
   G.Decl _ topdef -> case topdef of
     
@@ -348,7 +346,10 @@ runInterpreter program =
     (res, a) <- runReaderT (runStateT (runExceptT (interpret program)) newState) newEnv
     case res of
       Left e -> putStrLn $ "runtime error: \n" ++ e
-      Right f -> mapM_ wypisz $ M.toList $ first $ a
+      Right f -> putStrLn $ "\nProgram completed successfully!"
+
+{-       
+        mapM_ wypisz $ M.toList $ first $ a
           where 
             wypisz (l, i) = do {putStr $ (show l)++", "; putStrLn $ show i}  
-      
+-}

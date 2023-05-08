@@ -166,8 +166,6 @@ transStmts [] = return Nothing
 transStmts (x:xs) = case x of
 
   G.Empty _ -> return Nothing
-
-  G.BStmt _ block -> undefined
   
   G.Decl _ topdef -> case topdef of
     
