@@ -135,11 +135,14 @@ transTopDefs (y:ys) = case y of
                 _ -> do
                   env <- ask
                   new_env <- addArgToEnv args env
-                  returned_type <- local (\e -> new_env) (transBlockWithRet block id pos)
                   ret_type <- transType type_
-                  when (returned_type /= ret_type) $ throwError $ show $ ErrorReturnTypeMismatch id ret_type returned_type pos
                   args_type <- transArg args []
                   let res = MyFunc ret_type args_type
+                  let new_env_ = new_env { varType = M.insert id res (varType new_env) }
+
+                  returned_type <- local (\e -> new_env_) (transBlockWithRet block id pos)
+                  when (returned_type /= ret_type) $ throwError $ show $ ErrorReturnTypeMismatch id ret_type returned_type pos
+                  
                   local (\e -> e { varType = M.insert id res (varType e) }) (transTopDefs ys)
 
      
@@ -164,7 +167,7 @@ transStmts (x:xs) = case x of
 
   G.Empty _ -> return Nothing
 
-  G.BStmt _ block -> return Nothing
+  G.BStmt _ block -> undefined
   
   G.Decl _ topdef -> case topdef of
     

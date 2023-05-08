@@ -113,7 +113,6 @@ transBlock ::  G.Block -> Result ()
 transBlock x = case x of
   G.Block _ stmts -> transStmts stmts >> return ()
 
--- typechekcer zapewnia ze tu bedzie int
 incResult :: TypeOfResult -> TypeOfResult
 incResult (MyInt n) = MyInt (n + 1)
 
@@ -127,7 +126,7 @@ transStmts (x:xs) = case x of
 
   G.Empty _ -> return Nothing
 
-  G.BStmt _ block -> return Nothing
+  G.BStmt _ block -> return undefined
   
   G.Decl _ topdef -> case topdef of
     
@@ -160,7 +159,7 @@ transStmts (x:xs) = case x of
   G.Incr pos ident -> do
           env <- ask
           id <- transIdent ident
-          let Just l = M.lookup id env -- ten błąd powinien zglaszac typechecker
+          let Just l = M.lookup id env
           (st,_,_)  <- get
           let val = M.lookup l st
           case val of
@@ -216,8 +215,6 @@ transAppFunc x expr env = case x of
                       new_env <- doFunc args expr env
                       local (\e -> new_env) (transBlockWithRet block)
                       
--- typechecker bedzie sprawdzal czy podane expr sa dobrego typu
---insertArg [] [] = local () ()
 doFunc :: [G.Arg] -> [G.Expr] -> Env -> Result Env
 doFunc [] [] env = return env
 doFunc (arg:args) (expr:exprs) env = do
@@ -231,8 +228,6 @@ doFunc (arg:args) (expr:exprs) env = do
                               let new_env = M.insert id l env
                               doFunc args exprs new_env
 
-                -- typechecker zapewni ze jesli jest referecja to podana zostala zmienna juz zadeklarowana wczensniej
-                -- expr to E.Var
                 G.ArgRef _ type_ ident -> do 
                               new_id <- transIdent ident
                               let G.EVar _ old_ident = expr
