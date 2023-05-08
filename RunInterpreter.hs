@@ -10,13 +10,15 @@ import Prelude
   , Int, (>)
   , String, (++), concat, unlines
   , Show, show
-  , IO, (>>), (>>=), mapM_, putStrLn
+  , IO, (>>), (>>=), mapM_, putStrLn, putStr
   , FilePath
   , getContents, readFile
   )
+
+import System.IO (hPutStrLn, stderr)
 import System.Environment ( getArgs )
 import System.Exit        ( exitFailure )
-import Control.Monad      ( when )
+import Control.Monad      ( when, void )
 
 import AbsGramar   ()
 import LexGramar   ( Token, mkPosToken )
@@ -51,9 +53,13 @@ run v p s =
       --showTree v tree
       --putStrLn "\n________________________"
       case runTypeChecker tree of
-        Left error -> putStrLn $ "\nTypeChecker error: " ++ error
-        Right _ -> runInterpreter tree
-
+        Left error -> hPutStrLn stderr $ "\nTypeChecker error: " ++ error
+        Right _ -> do
+          interpreter_res <- runInterpreter tree
+          case interpreter_res of
+            Left e -> hPutStrLn stderr $ "runtime error: \n" ++ e
+            Right f -> putStr("")
+          
   where
   ts = myLexer s
   showPosToken ((l,c),t) = concat [ show l, ":", show c, "\t", show t ]

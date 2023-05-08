@@ -17,7 +17,7 @@ import Control.Monad.Reader
 import Control.Monad.Except
 
 
-data Type = MyInt | MyBool | MyStr | MyVoid | MyFunc Type [Type]
+data Type = MyInt | MyBool | MyStr | MyVoid | MyFunc Type [Type] | MyRef Type
     deriving(Eq)
 
 instance Show Type where
@@ -26,6 +26,7 @@ instance Show Type where
   show (MyStr) = "string"
   show (MyVoid) = "void"
   show (MyFunc t1 t2) = "function (" ++ show t2 ++ show t1 ++ ")"
+  show (MyRef t) = "ref" ++ show t
 
 data Env = Env { 
     varType :: M.Map String Type, 
@@ -47,6 +48,7 @@ data MyError = ErrorTypeMismatch Type Type G.BNFC'Position
              | ErrorMainWrongReturnType Type G.BNFC'Position
              | ErrorMainHasArguments G.BNFC'Position
              | ErrorPrint Int G.BNFC'Position
+             | ErrorReference String Int G.BNFC'Position
 
 
 printPos Nothing = ""
@@ -56,18 +58,19 @@ instance Show MyError where
   show (ErrorTypeMismatch expected actual pos) = "TypesMismatchError \n expected type: " ++ show expected ++ ", actual type: " ++ show actual ++ printPos pos
   show (ErrorUndefinedVariable name pos) = "UndefinedVariableError\n undefined variable " ++ name ++  printPos pos
   show (ErrorNoReturn name pos) = "NoReturnError\n Funtion " ++ name ++ " declared "  ++ printPos pos ++ " has no return statement"
-  show (ErrorReturnTypeMismatch name expected actual pos) = "ReturnTypeMismatchError \n Wrong type of the returned value in function " ++ name ++ " declared "++ printPos pos
+  show (ErrorReturnTypeMismatch name expected actual pos) = "ReturnTypeMismatchError \n Wrong type of the returned value in function " ++ name ++ " declared" ++ printPos pos
                                                              ++ "\n expected type: " ++ show expected ++ ", actual type: " ++ show actual 
   show (ErrorUndefinedFunction name pos) = "UndefinedFunctionError\n undefined function " ++ name ++  printPos pos
   show (ErrorArgumentTypeMismatch name numb expected actual pos) = "ArgumentTypeMismatchError \n Wrong type of argument number " ++ show numb ++  " in application of function " ++ name ++ printPos pos
                                                              ++ "\n expected type: " ++ show expected ++ ", actual type: " ++ show actual 
   show (ErrorTooFewArguments name pos) = "TooFewArgumentsError\n too few arguments in application of function " ++ name ++ printPos pos
   show (ErrorTooManyArguments name pos) = "TooManyArgumentsError\n too many arguments in application of function " ++ name ++ printPos pos
-  show (ErrorMainNotLastDeclaration pos) = "MainNotLastDeclarationError \n" ++ "Function main (declared " ++ printPos pos ++ ") istn't the last definition in the program" 
-  show (ErrorMainWrongReturnType t pos) = "MainWrongReturnTypeError \n" ++ "Wrong return type at main declaration " ++ printPos pos 
+  show (ErrorMainNotLastDeclaration pos) = "MainNotLastDeclarationError \n" ++ "Function main (declared" ++ printPos pos ++ ") istn't the last definition in the program" 
+  show (ErrorMainWrongReturnType t pos) = "MainWrongReturnTypeError \n" ++ "Wrong return type at main declaration" ++ printPos pos 
                                           ++ "\n expected type: void, actual type: " ++ show t
-  show (ErrorMainHasArguments pos) = "MainHasArgumentsError \n Error in main declared " ++ printPos pos ++ ", function main doesn't take arguments"
-  show (ErrorPrint nb pos) = "PrintError \n Error in usage of print " ++ printPos pos ++ "\nType of argument number " ++ show nb ++ " is void, print argument cannot be void"
+  show (ErrorMainHasArguments pos) = "MainHasArgumentsError \n Error in main declared" ++ printPos pos ++ ", function main doesn't take arguments"
+  show (ErrorPrint nb pos) = "PrintError \n Error in usage of print" ++ printPos pos ++ "\nType of argument number " ++ show nb ++ " is void, print argument cannot be void"
+  show (ErrorReference name nb pos) = "ReferenceError \n Error in use of function " ++ name ++ printPos pos ++ ", argument number " ++ show nb ++ " is not a variable, \n argument passed by reference must be a variable"
 
 transIdent :: G.Ident -> Result String
 transIdent x = case x of
@@ -75,7 +78,10 @@ transIdent x = case x of
 
 transProgram ::  G.Program -> Result Type
 transProgram x = case x of
-  G.Program _ topdefs -> transTopDefs topdefs
+  G.Program _ topdefs -> do
+    env <- ask
+    env_with_func <- transTopDefsFuncOnly topdefs env
+    local (\e -> env_with_func) (transTopDefs topdefs)
 
 
 transBlockWithRet ::  G.Block -> String -> G.BNFC'Position -> Result Type
@@ -99,7 +105,8 @@ transArg (x:xs) res = do
         transArg xs (res ++ [t]) 
       G.ArgRef _ type_ ident -> do
         t <- transType type_
-        transArg xs (res ++ [t])
+        let ref_t = MyRef t 
+        transArg xs (res ++ [ref_t])
 
 
 addArgToEnv :: [G.Arg] -> Env -> Result Env
@@ -117,9 +124,9 @@ addArgToEnv (x:xs) e = do
               let new_env = e { varType = M.insert id t (varType e) }
               addArgToEnv xs new_env
 
-transTopDefs :: [G.TopDef] -> Result Type
-transTopDefs [] = return MyVoid
-transTopDefs (y:ys) = case y of
+transTopDefsFuncOnly :: [G.TopDef] -> Env -> Result Env
+transTopDefsFuncOnly [] env = return env
+transTopDefsFuncOnly (y:ys) env = case y of
 
     G.Fn _ (G.FnDef pos type_ ident args block) -> do
               id <- transIdent ident
@@ -130,25 +137,39 @@ transTopDefs (y:ys) = case y of
                       ret_type <- transType type_
                       when (ret_type /= MyVoid) $ throwError $ show $ ErrorMainWrongReturnType ret_type pos
                       when (args /= []) $ throwError $ show $ ErrorMainHasArguments pos
+                      return env
+                    _ -> do
+                      throwError $ show $ ErrorMainNotLastDeclaration pos
+                  
+                _ -> do
+                  ret_type <- transType type_
+                  args_type <- transArg args []
+                  let res = MyFunc ret_type args_type                  
+                  let new_env  = env { varType = M.insert id res (varType env) }
+                  transTopDefsFuncOnly ys new_env
+
+    G.VarDef _ type_ item -> transTopDefsFuncOnly ys env
+
+transTopDefs :: [G.TopDef] -> Result Type
+transTopDefs [] = return MyVoid
+transTopDefs (y:ys) =case y of
+
+    G.Fn _ (G.FnDef pos type_ ident args block) -> do
+              id <- transIdent ident
+              case id of
+                "main" -> do
+                      ret_type <- transType type_
                       returned_type <- transBlockWithRet block id pos
                       when (returned_type /= ret_type) $ throwError $ show $ ErrorReturnTypeMismatch id ret_type returned_type pos
                       return MyVoid
-
-                    _ -> do
-                      throwError $ show $ ErrorMainNotLastDeclaration pos
                   
                 _ -> do
                   env <- ask
                   new_env <- addArgToEnv args env
                   ret_type <- transType type_
-                  args_type <- transArg args []
-                  let res = MyFunc ret_type args_type
-                  let new_env_ = new_env { varType = M.insert id res (varType new_env) }
-
-                  returned_type <- local (\e -> new_env_) (transBlockWithRet block id pos)
+                  returned_type <- local (\e -> new_env) (transBlockWithRet block id pos)
                   when (returned_type /= ret_type) $ throwError $ show $ ErrorReturnTypeMismatch id ret_type returned_type pos
-                  
-                  local (\e -> e { varType = M.insert id res (varType e) }) (transTopDefs ys)
+                  local (\e -> e) (transTopDefs ys) -- moze ten local nie jest niebedny
 
      
     G.VarDef _ type_ item -> case item of
@@ -164,6 +185,8 @@ transTopDefs (y:ys) = case y of
         t <- transType type_
         when (e /= t) $ throwError $ show $ ErrorTypeMismatch t e pos
         local (\e -> e { varType = M.insert id t (varType e) }) (transTopDefs ys)
+
+
 
 
 transStmts ::  [G.Stmt ] -> Result (Maybe Type)
@@ -268,13 +291,23 @@ ensureMyStr pos expr = do
         t <- transExpr expr
         when (t /= MyStr) $ throwError $ show $ ErrorTypeMismatch MyStr t pos
 
-checkArgs :: [Type] -> [Type] -> String -> G.BNFC'Position -> Int -> Result ()
+checkArgs :: [Type] -> [G.Expr] -> String -> G.BNFC'Position -> Int -> Result ()
 checkArgs [] [] name pos i = return ()
 checkArgs a [] name pos i = throwError $ show $ ErrorTooFewArguments name pos 
 checkArgs [] a name pos i = throwError $ show $ ErrorTooManyArguments name pos 
-checkArgs (arg:args) (expr:exprs) name pos i = do
-        when (arg /= expr) $ throwError $ show $ ErrorArgumentTypeMismatch name i arg expr pos 
-        checkArgs args exprs name pos (i+1)
+
+checkArgs (arg:args) (expr:exprs) name pos i = case arg of
+        MyRef ref -> case expr of
+            G.EVar _ _ -> do
+                  e <- transExpr expr
+                  when (ref /= e) $ throwError $ show $ ErrorArgumentTypeMismatch name i ref e pos 
+                  checkArgs args exprs name pos (i+1)
+            _ -> throwError $ show $ ErrorReference name i pos
+
+        a -> do
+            e <- transExpr expr
+            when (a /= e) $ throwError $ show $ ErrorArgumentTypeMismatch name i a e pos 
+            checkArgs args exprs name pos (i+1)
 
 checkPrintArgs [] pos nb = return True
 checkPrintArgs (expr:exprs) pos nb = do
@@ -310,7 +343,7 @@ transExpr x = case x of
                         Nothing -> throwError $ show $ ErrorUndefinedFunction id pos
                         Just val -> case val of
                             MyFunc ret args -> do
-                                checkArgs args e id pos 1
+                                checkArgs args exprs id pos 1
                                 return ret
                             _ -> undefined
 

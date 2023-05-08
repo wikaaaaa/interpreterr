@@ -35,14 +35,14 @@ type Store = (Mem, Loc, FuncMem)
 type Result a = ExceptT String (StateT Store (ReaderT Env IO)) a
 
 data MyError = ErrorUninitializedVariable String G.BNFC'Position
+             | ErrorDevisionByZero G.BNFC'Position
 
 printPos Nothing = ""
 printPos (Just (l,c)) = " at line " ++ show l ++ ", column " ++ show c
 
 instance Show MyError where
   show (ErrorUninitializedVariable name pos) = "UninitializedError\n unitialized variable " ++ name ++  printPos pos
--- throwError $ show $ ErrorUninitializedVariable id pos 
-
+  show (ErrorDevisionByZero pos) = "DevisionByZeroError \n devision by zero" ++ printPos pos
 
 -- rezerwacja nowej lokacji
 newloc :: Result Loc
@@ -286,10 +286,11 @@ transExpr x = case x of
                 MyBool e <- transExpr expr
                 return $ MyBool (not e)
   
-  G.EMul _ expr1 mulop expr2 -> do
+  G.EMul pos expr1 mulop expr2 -> do
                     MyInt e1 <- transExpr expr1
                     MyInt e2 <- transExpr expr2
-                    op <- transMulOp mulop
+                    (op, div) <- transMulOp mulop
+                    when (div && (e2 == 0)) $ throwError $ show $ ErrorDevisionByZero pos
                     return $ MyInt (op e1 e2)
 
   G.EAdd _ expr1 addop expr2 -> do
@@ -319,18 +320,18 @@ transAddOp x = case x of
   G.Plus _ -> return (+)
   G.Minus _ -> return (-)
 
-transMulOp :: G.MulOp -> Result (Integer -> Integer -> Integer)
+transMulOp :: G.MulOp -> Result ((Integer -> Integer -> Integer), Bool)
 transMulOp x = case x of
-  G.Times _ -> return (*)
-  G.Div _ -> return div
-  G.Mod _ -> return mod
+  G.Times _ -> return ((*), False)
+  G.Div _ -> return (div, True)
+  G.Mod _ -> return (mod, False)
 
 transRelOp :: G.RelOp -> Result(Integer -> Integer -> Bool)
 transRelOp x = case x of
-  G.LTH _ -> return (<=)
-  G.LE _ -> return (<)
-  G.GTH _ -> return (>=)
-  G.GE _ -> return (>)
+  G.LTH _ -> return (<)
+  G.LE _ -> return (<=)
+  G.GTH _ -> return (>)
+  G.GE _ -> return (>=)
   G.EQU _ -> return (==)
   G.NE _ -> return (/=)
 
@@ -346,11 +347,14 @@ runInterpreter program =
     let (newEnv, newState) = (M.empty, (M.empty, 0, M.empty))
     in do 
     (res, a) <- runReaderT (runStateT (runExceptT (interpret program)) newState) newEnv
-    case res of
+    return res
+
+
+ {-    case res of
       Left e -> putStrLn $ "runtime error: \n" ++ e
       Right f -> putStrLn $ "\nProgram completed successfully!"
 
-{-       
+      
         mapM_ wypisz $ M.toList $ first $ a
           where 
             wypisz (l, i) = do {putStr $ (show l)++", "; putStrLn $ show i}  
