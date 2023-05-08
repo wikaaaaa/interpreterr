@@ -45,6 +45,8 @@ data MyError = ErrorTypeMismatch Type Type G.BNFC'Position
              | ErrorTooManyArguments String G.BNFC'Position
              | ErrorMainNotLastDeclaration G.BNFC'Position
              | ErrorMainWrongReturnType Type G.BNFC'Position
+             | ErrorMainHasArguments G.BNFC'Position
+             | ErrorPrint Int G.BNFC'Position
 
 
 printPos Nothing = ""
@@ -64,6 +66,8 @@ instance Show MyError where
   show (ErrorMainNotLastDeclaration pos) = "MainNotLastDeclarationError \n" ++ "Function main (declared " ++ printPos pos ++ ") istn't the last definition in the program" 
   show (ErrorMainWrongReturnType t pos) = "MainWrongReturnTypeError \n" ++ "Wrong return type at main declaration " ++ printPos pos 
                                           ++ "\n expected type: void, actual type: " ++ show t
+  show (ErrorMainHasArguments pos) = "MainHasArgumentsError \n Error in main declared " ++ printPos pos ++ ", function main doesn't take arguments"
+  show (ErrorPrint nb pos) = "PrintError \n Error in usage of print " ++ printPos pos ++ "\nType of argument number " ++ show nb ++ " is void, print argument cannot be void"
 
 transIdent :: G.Ident -> Result String
 transIdent x = case x of
@@ -125,6 +129,7 @@ transTopDefs (y:ys) = case y of
                     [] -> do
                       ret_type <- transType type_
                       when (ret_type /= MyVoid) $ throwError $ show $ ErrorMainWrongReturnType ret_type pos
+                      when (args /= []) $ throwError $ show $ ErrorMainHasArguments pos
                       returned_type <- transBlockWithRet block id pos
                       when (returned_type /= ret_type) $ throwError $ show $ ErrorReturnTypeMismatch id ret_type returned_type pos
                       return MyVoid
@@ -271,6 +276,11 @@ checkArgs (arg:args) (expr:exprs) name pos i = do
         when (arg /= expr) $ throwError $ show $ ErrorArgumentTypeMismatch name i arg expr pos 
         checkArgs args exprs name pos (i+1)
 
+checkPrintArgs [] pos nb = return True
+checkPrintArgs (expr:exprs) pos nb = do
+        when (expr == MyVoid) $ throwError $ show $ ErrorPrint nb pos
+        checkPrintArgs exprs pos (nb+1)
+
 transExpr ::  G.Expr -> Result Type
 transExpr x = case x of
   G.EVar pos ident -> do
@@ -286,11 +296,13 @@ transExpr x = case x of
   G.ELitTrue _ -> return MyBool
   G.ELitFalse _ -> return MyBool
 
-  G.EApp pos ident exprs -> do
+  G.EApp pos ident exprs -> do  
               e <- mapM transExpr exprs
               id <- transIdent ident
               case id of
-                  "print" -> return $ MyVoid
+                  "print" -> do
+                    checkPrintArgs e pos 1
+                    return $ MyVoid
                   _ -> do
                     env <- ask
                     let i = M.lookup id (varType env)

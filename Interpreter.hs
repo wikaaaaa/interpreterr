@@ -21,6 +21,7 @@ import Prelude
 data TypeOfResult = MyInt Integer 
                   | MyStr String
                   | MyBool Bool
+                  | MyVoid
   deriving (Show)
 
 
@@ -106,7 +107,7 @@ transFnDef x = case x of
 transBlockWithRet ::  G.Block -> Result TypeOfResult
 transBlockWithRet x = case x of
   G.Block _ stmts -> do
-    Just ret <- transStmts stmts -- tu jakis local chyba
+    Just ret <- transStmts stmts
     return ret
 
 transBlock ::  G.Block -> Result ()
@@ -181,7 +182,7 @@ transStmts (x:xs) = case x of
             e <- transExpr expr
             return $ Just e
           
-  G.VRet _ -> return $ Just (MyBool True)
+  G.VRet _ -> return $ Just MyVoid
 
   G.Cond _ expr block -> do
           MyBool e <- transExpr expr
@@ -243,6 +244,7 @@ prettyPrint (x:xs) = case x of
                 MyInt i -> show i ++ prettyPrint xs
                 MyBool i -> show i ++ prettyPrint xs
                 MyStr i -> i ++ prettyPrint xs
+                MyVoid -> "void"
 
 
 transExpr ::  G.Expr -> Result TypeOfResult
