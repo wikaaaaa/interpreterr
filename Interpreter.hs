@@ -152,7 +152,7 @@ transStmts (x:xs) = case x of
   G.Ass _ ident expr -> do
           env <- ask
           id <- transIdent ident
-          let l = fromMaybe (error "undefined variable") (M.lookup id env) -- ten błąd powinien zglaszac typechecker
+          let Just l = M.lookup id env
           w <- transExpr expr
           modifyMem $ M.insert l w
           transStmts xs
@@ -160,7 +160,7 @@ transStmts (x:xs) = case x of
   G.Incr pos ident -> do
           env <- ask
           id <- transIdent ident
-          let l = fromMaybe (error "undefined variable") (M.lookup id env) -- ten błąd powinien zglaszac typechecker
+          let Just l = M.lookup id env -- ten błąd powinien zglaszac typechecker
           (st,_,_)  <- get
           let val = M.lookup l st
           case val of
@@ -172,7 +172,7 @@ transStmts (x:xs) = case x of
   G.Decr pos ident -> do
           env <- ask
           id <- transIdent ident
-          let l = fromMaybe (error "undefined variable") (M.lookup id env) -- ten błąd powinien zglaszac typechecker
+          let Just l = M.lookup id env
           (st,_,_)  <- get
           let val = M.lookup l st
           case val of
@@ -238,7 +238,7 @@ doFunc (arg:args) (expr:exprs) env = do
                               let G.EVar _ old_ident = expr
                               old_id <- transIdent old_ident
                               old_env <- ask
-                              let l = fromMaybe (error "undefined variable") (M.lookup old_id old_env)
+                              let Just l = M.lookup old_id old_env
                               let new_env = M.insert new_id l env
                               doFunc args exprs new_env
 
@@ -257,7 +257,7 @@ transExpr x = case x of
   G.EVar pos ident -> do
               env <- ask
               id <-  transIdent ident
-              let l = fromMaybe (error "undefined variable") (M.lookup id env)
+              let Just l = M.lookup id env
               (st,_,_)  <- get
               let val = M.lookup l st
               case val of
@@ -277,7 +277,7 @@ transExpr x = case x of
                             return $ MyBool True
                   _ -> do
                     (st,l,funcMem) <- get
-                    let (fun, env) = fromMaybe (error "undefined function") (M.lookup id funcMem)
+                    let Just (fun, env) = M.lookup id funcMem
                     local (\e -> e) (transAppFunc fun exprs env)
                     
                     
