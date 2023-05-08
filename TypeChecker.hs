@@ -43,6 +43,8 @@ data MyError = ErrorTypeMismatch Type Type G.BNFC'Position
              | ErrorArgumentTypeMismatch String Int Type Type G.BNFC'Position
              | ErrorTooFewArguments String G.BNFC'Position
              | ErrorTooManyArguments String G.BNFC'Position
+             | ErrorMainNotLastDeclaration G.BNFC'Position
+             | ErrorMainWrongReturnType Type G.BNFC'Position
 
 
 printPos Nothing = ""
@@ -59,6 +61,9 @@ instance Show MyError where
                                                              ++ "\n expected type: " ++ show expected ++ ", actual type: " ++ show actual 
   show (ErrorTooFewArguments name pos) = "TooFewArgumentsError\n too few arguments in application of function " ++ name ++ printPos pos
   show (ErrorTooManyArguments name pos) = "TooManyArgumentsError\n too many arguments in application of function " ++ name ++ printPos pos
+  show (ErrorMainNotLastDeclaration pos) = "MainNotLastDeclarationError \n" ++ "Function main (declared " ++ printPos pos ++ ") istn't the last definition in the program" 
+  show (ErrorMainWrongReturnType t pos) = "MainWrongReturnTypeError \n" ++ "Wrong return type at main declaration " ++ printPos pos 
+                                          ++ "\n expected type: void, actual type: " ++ show t
 
 transIdent :: G.Ident -> Result String
 transIdent x = case x of
@@ -115,7 +120,18 @@ transTopDefs (y:ys) = case y of
     G.Fn _ (G.FnDef pos type_ ident args block) -> do
               id <- transIdent ident
               case id of
-                "main" -> transBlock block >> return MyVoid
+                "main" -> do
+                  case ys of
+                    [] -> do
+                      ret_type <- transType type_
+                      when (ret_type /= MyVoid) $ throwError $ show $ ErrorMainWrongReturnType ret_type pos
+                      returned_type <- transBlockWithRet block id pos
+                      when (returned_type /= ret_type) $ throwError $ show $ ErrorReturnTypeMismatch id ret_type returned_type pos
+                      return MyVoid
+
+                    _ -> do
+                      throwError $ show $ ErrorMainNotLastDeclaration pos
+                  
                 _ -> do
                   env <- ask
                   new_env <- addArgToEnv args env
