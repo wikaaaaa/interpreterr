@@ -1,0 +1,13 @@
+def void f () {
+    return;
+}
+
+def int f (int x) {
+    return x;
+}
+
+def void main() {
+    fn print("ok");
+    return;
+
+}
