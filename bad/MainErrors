@@ -1,0 +1,28 @@
+# ErrorMainNotLastDeclaration
+def void main () {
+    var int y = x;
+    return;
+}
+
+var int x = 5;
+
+/*
+
+# ErrorMainWrongReturnType
+def int main() {
+    return 8;
+}
+
+
+# ErrorNoReturn
+def void main() {
+    
+}
+ 
+
+# ErrorMainHasArguments
+def void main(int x) {
+    return;
+}
+
+*/

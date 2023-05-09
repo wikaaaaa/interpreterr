@@ -1,0 +1,22 @@
+def void pierwsza(int x) {
+    if (x < 10) {
+        x++;
+        fn print("pierwsza ", x);
+        fn druga(x);
+    }
+    return;
+}
+
+def void druga(int x) {
+    if (x < 10) {
+        x++;
+        fn print("druga ", x);
+        fn pierwsza(x);
+    }
+    return;
+}
+
+def void main () {
+    fn pierwsza(0);
+    return;
+}

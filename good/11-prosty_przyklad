@@ -1,0 +1,30 @@
+def int zwieksz(int x) {
+    while (x < 5) {
+        x ++;
+    }
+    return x;
+}
+
+def string dwa(int x) {
+    var string wynik;
+    if (x == 2) {
+        wynik = "liczba to dwa";
+    } else {
+        wynik = "liczba to nie dwa";
+    }
+    return wynik;
+}
+
+def void main() {
+    var int x = 2;
+    fn print(fn dwa(x));
+    x = fn zwieksz(x);
+    var bool wieksze;
+    if (x > 4) {
+        wieksze = true;
+    } else {
+        wieksze = false;
+    }
+    fn print(wieksze);
+    return;
+}

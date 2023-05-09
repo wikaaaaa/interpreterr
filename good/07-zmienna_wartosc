@@ -1,0 +1,19 @@
+def void wartosc (int i) {
+  i = 2;
+  return;
+}
+
+def void zmienna (ref int i) {
+  i = 3;
+  return;
+}
+
+def void main() {
+  var int i = 5;
+  fn print (i);
+  fn wartosc(i);
+  fn print (i);
+  fn zmienna(i);
+  fn print (i);
+  return;
+}

@@ -1,0 +1,9 @@
+def void sprawdz(int x) {
+    if (x > 0) {
+        fn print("większe niz 0");
+    }
+}
+
+def void main() {
+
+}

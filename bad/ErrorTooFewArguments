@@ -1,0 +1,8 @@
+def int funkcja (int x, int y, int z) {
+    return z + y + z;
+}
+
+def void main() {
+    fn print (fn funkcja(1,1));
+    return;
+}

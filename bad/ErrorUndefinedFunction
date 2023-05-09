@@ -1,0 +1,6 @@
+def void main() {
+    var int x = 9;
+    var int y = 1;
+    var int z = fn dodaj(x, y);
+    return;
+}

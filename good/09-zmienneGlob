@@ -1,0 +1,20 @@
+var int x = 500; // zmienna globalna
+
+def void zmglob() {
+    x = x + 1;
+    fn print("globalny: ", x); // globalny x: 501
+    return;
+}
+
+def void zmlok() {
+    var int x = 10;
+    fn zmglob();
+    fn print("lokalny: ",x); // lokalny x: 10
+    return;
+}
+
+def void main() {
+    fn zmlok();
+    fn print("globalny: ", x);  // globalny x: 501
+    return;
+}

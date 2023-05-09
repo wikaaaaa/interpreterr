@@ -1,0 +1,7 @@
+def int funkcja () {
+    var int x = y; 
+}
+
+def void main () {
+    fn print("ok");
+}

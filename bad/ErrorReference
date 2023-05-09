@@ -1,0 +1,12 @@
+def void func (int x, ref int y) {
+    y = x;
+    return;
+}
+
+def void main() {
+    var int x = 200;
+    var int y = 0;
+    fn func(x, 9);
+    fn print(y);
+    return;
+}

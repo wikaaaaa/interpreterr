@@ -1,0 +1,11 @@
+def int funkcja (int x, int y) {
+    return x + y;
+}
+
+def void main() {
+    fn print ("hello");
+    var int x = 1;
+    var int y = 9;
+    var bool z = fn funkcja(x, y);
+    return;
+}

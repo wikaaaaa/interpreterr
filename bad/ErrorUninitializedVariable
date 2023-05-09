@@ -1,0 +1,19 @@
+var int x;
+var int y;
+
+def void wypisz_x () {
+    fn print(x);
+    return;
+}
+
+def void wypisz_y () {
+    fn print(y);
+    return;
+}
+
+def void main () {
+    x = 5;
+    fn wypisz_x();
+    fn wypisz_y();
+    return;
+}

@@ -53,7 +53,7 @@ run v p s =
       --showTree v tree
       --putStrLn "\n________________________"
       case runTypeChecker tree of
-        Left error -> hPutStrLn stderr $ "\nTypeChecker error: " ++ error
+        Left error -> hPutStrLn stderr $ "TypeChecker error: " ++ error
         Right _ -> do
           interpreter_res <- runInterpreter tree
           case interpreter_res of
