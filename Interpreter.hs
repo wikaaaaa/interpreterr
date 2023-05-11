@@ -26,7 +26,12 @@ data TypeOfResult = MyInt Integer
 
 
 type Loc = Int -- lokacje pamieci
-type Env = M.Map String Loc
+
+data Env = Env { 
+    varEnv :: M.Map String Loc,
+    inWhile :: Bool
+}
+
 type Mem  = M.Map Loc TypeOfResult
 type FuncMem = M.Map String (G.FnDef, Env)
 type Store = (Mem, Loc, FuncMem)
@@ -82,7 +87,7 @@ transTopDefs (y:ys) = case y of
         id <- transIdent ident
         --let i = MyInt 0
         -- modifyMem (M.insert l i)
-        local (M.insert id l) (transTopDefs ys)
+        local (\e -> e { varEnv = M.insert id l (varEnv e) } ) (transTopDefs ys)
 
 
       G.Init _ ident expr -> do
@@ -90,7 +95,7 @@ transTopDefs (y:ys) = case y of
         l <- newloc
         id <- transIdent ident
         modifyMem (M.insert l e)
-        local (M.insert id l) (transTopDefs ys)
+        local (\e -> e { varEnv = M.insert id l (varEnv e) } ) (transTopDefs ys)
 
 transFnDef :: G.FnDef -> Result()
 transFnDef x = case x of
@@ -137,20 +142,20 @@ transStmts (x:xs) = case x of
             id <- transIdent ident
             --let i = MyInt 0
             --modifyMem (M.insert l i)
-            local (M.insert id l) (transStmts xs)
+            local (\e -> e { varEnv = M.insert id l (varEnv e) } ) (transStmts xs)
 
           G.Init _ ident expr -> do
             e <- transExpr expr
             l <- newloc
             id <- transIdent ident
             modifyMem (M.insert l e)
-            local (M.insert id l) (transStmts xs)
+            local (\e -> e { varEnv = M.insert id l (varEnv e) } ) (transStmts xs)
 
   -- zakładając ze zmienna byla wczesniej zadeklarowana
   G.Ass _ ident expr -> do
           env <- ask
           id <- transIdent ident
-          let Just l = M.lookup id env
+          let Just l = M.lookup id (varEnv env)
           w <- transExpr expr
           modifyMem $ M.insert l w
           transStmts xs
@@ -158,7 +163,7 @@ transStmts (x:xs) = case x of
   G.Incr pos ident -> do
           env <- ask
           id <- transIdent ident
-          let Just l = M.lookup id env
+          let Just l = M.lookup id (varEnv env)
           (st,_,_)  <- get
           let val = M.lookup l st
           case val of
@@ -170,7 +175,7 @@ transStmts (x:xs) = case x of
   G.Decr pos ident -> do
           env <- ask
           id <- transIdent ident
-          let Just l = M.lookup id env
+          let Just l = M.lookup id (varEnv env)
           (st,_,_)  <- get
           let val = M.lookup l st
           case val of
@@ -224,7 +229,7 @@ doFunc (arg:args) (expr:exprs) env = do
                               id <- transIdent ident
                               l <- newloc
                               modifyMem (M.insert l e)
-                              let new_env = M.insert id l env
+                              let new_env = env { varEnv = M.insert id l (varEnv env) }
                               doFunc args exprs new_env
 
                 G.ArgRef _ type_ ident -> do 
@@ -232,8 +237,8 @@ doFunc (arg:args) (expr:exprs) env = do
                               let G.EVar _ old_ident = expr
                               old_id <- transIdent old_ident
                               old_env <- ask
-                              let Just l = M.lookup old_id old_env
-                              let new_env = M.insert new_id l env
+                              let Just l = M.lookup old_id (varEnv old_env)
+                              let new_env =  env { varEnv = M.insert new_id l (varEnv env) }
                               doFunc args exprs new_env
 
 
@@ -252,7 +257,7 @@ transExpr x = case x of
   G.EVar pos ident -> do
               env <- ask
               id <-  transIdent ident
-              let Just l = M.lookup id env
+              let Just l = M.lookup id (varEnv env)
               (st,_,_)  <- get
               let val = M.lookup l st
               case val of
@@ -344,7 +349,7 @@ interpret = transProgram
 first (a, b,c) = a
 
 runInterpreter program = 
-    let (newEnv, newState) = (M.empty, (M.empty, 0, M.empty))
+    let (newEnv, newState) = (Env { varEnv = M.empty, inWhile = False }, (M.empty, 0, M.empty))
     in do 
     (res, a) <- runReaderT (runStateT (runExceptT (interpret program)) newState) newEnv
     return res

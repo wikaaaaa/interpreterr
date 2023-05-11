@@ -57,7 +57,7 @@ run v p s =
         Right _ -> do
           interpreter_res <- runInterpreter tree
           case interpreter_res of
-            Left e -> hPutStrLn stderr $ "runtime error: \n" ++ e
+            Left e -> hPutStrLn stderr $ "runtime error: " ++ e
             Right f -> putStr("")
           
   where
