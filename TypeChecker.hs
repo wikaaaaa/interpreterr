@@ -15,6 +15,7 @@ import Data.Maybe(fromMaybe, Maybe(..))
 import Control.Monad.Reader
 
 import Control.Monad.Except
+import qualified Data.Set as Set
 
 
 data Type = MyInt | MyBool | MyStr | MyVoid | MyFunc Type [Type] | MyRef Type
@@ -33,6 +34,7 @@ data Env = Env {
     retType :: Maybe Type,
     ret :: Bool,
     inWhile :: Bool
+    names :: Set.Set String
 }
 
 type Result a = ExceptT String (Reader Env) a
@@ -92,14 +94,16 @@ transProgram x = case x of
 transBlockWithRet ::  G.Block -> String -> G.BNFC'Position -> Result Type
 transBlockWithRet x name pos = case x of
   G.Block _ stmts -> do
-    ret <- transStmts stmts
+    ret <- local (\e -> e { names = Set.empty }) (transStmts stmts)
     case ret of
       Nothing -> throwError $ show $ ErrorNoReturn name pos
       Just r -> return r
 
 transBlock ::  G.Block -> Result Type
 transBlock x = case x of
-  G.Block _ stmts -> transStmts stmts >> return MyVoid
+  G.Block _ stmts -> do
+    local (\e -> e { names = Set.empty }) (transStmts stmts)
+    return MyVoid
 
 transArg :: [G.Arg] -> [Type] -> Result [Type]
 transArg [] res = return res
@@ -151,7 +155,7 @@ transTopDefsFuncOnly (y:ys) env = case y of
                   ret_type <- transType type_
                   args_type <- transArg args []
                   let res = MyFunc ret_type args_type                  
-                  let new_env  = env { varType = M.insert id res (varType env) }
+                  let new_env  = env { varType = M.insert id res (varType env), names = Set.insert id ( names env )  }
                   transTopDefsFuncOnly ys new_env
 
     G.VarDef _ type_ item -> transTopDefsFuncOnly ys env
@@ -183,7 +187,7 @@ transTopDefs (y:ys) = case y of
         id <- transIdent ident
         checkIfAvailableVar id pos
         t <- transType type_
-        local (\e -> e { varType = M.insert id t (varType e) } ) (transTopDefs ys)
+        local (\e -> e { varType = M.insert id t (varType e), names = Set.insert id ( names e ) } ) (transTopDefs ys)
 
 
       G.Init pos ident expr -> do
@@ -192,7 +196,7 @@ transTopDefs (y:ys) = case y of
         checkIfAvailableVar id pos
         t <- transType type_
         when (e /= t) $ throwError $ show $ ErrorTypeMismatch t e pos
-        local (\e -> e { varType = M.insert id t (varType e) }) (transTopDefs ys)
+        local (\e -> e { varType = M.insert id t (varType e) , names = Set.insert id ( names e ) }) (transTopDefs ys)
 
 
 checkIfAvailableFunc :: String -> Env -> G.BNFC'Position -> Result ()
@@ -206,10 +210,10 @@ checkIfAvailableFunc id env pos = do
 checkIfAvailableVar :: String -> G.BNFC'Position -> Result ()
 checkIfAvailableVar id pos = do
           env <- ask
-          let i = M.lookup id (varType env)
+          let i = Set.member id (names env)
           case i of
-            Nothing -> return ()
-            Just _ -> throwError $ show $ ErrorUsedName "variable" id pos
+            False -> return ()
+            True  -> throwError $ show $ ErrorUsedName "variable" id pos
 
 
 transStmts ::  [G.Stmt ] -> Result (Maybe Type)
@@ -227,7 +231,7 @@ transStmts (x:xs) = case x of
             id <- transIdent ident
             checkIfAvailableVar id pos
             t <- transType type_
-            local (\e -> e { varType = M.insert id t (varType e) }) (transStmts xs)
+            local (\e -> e { varType = M.insert id t (varType e), names = Set.insert id ( names e )  }) (transStmts xs)
 
 
           G.Init pos ident expr -> do
@@ -236,7 +240,7 @@ transStmts (x:xs) = case x of
             checkIfAvailableVar id pos
             t <- transType type_
             when (e /= t) $ throwError $ show $ ErrorTypeMismatch t e pos
-            local (\e -> e { varType = M.insert id t (varType e) }) (transStmts xs)
+            local (\e -> e { varType = M.insert id t (varType e) , names = Set.insert id ( names e ) }) (transStmts xs)
 
   -- zakładając ze zmienna byla wczesniej zadeklarowana
   G.Ass pos ident expr -> do
@@ -423,7 +427,7 @@ transType x = case x of
   G.MyVoid _ -> return MyVoid
 
 
-runEnvR r = runReader r Env { varType = M.empty, retType = Nothing, ret = False, inWhile = False } 
+runEnvR r = runReader r Env { varType = M.empty, retType = Nothing, ret = False, inWhile = False, names = Set.empty} 
 
 runResult :: Result a -> Either String a
 runResult t = runEnvR $ runExceptT t
