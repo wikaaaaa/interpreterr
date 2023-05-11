@@ -24,14 +24,15 @@ data TypeOfResult = MyInt Integer
                   | MyVoid
                   | MyBreak
                   | MyContinue
-  deriving (Show)
+                  | MyFunc G.FnDef Env
+  --deriving (Show)
 
+-- zbior globalnych funckji, i jesli nie istnieje lokalna funckja o danej nazwie to wyboerz globalna 
 
 type Loc = Int -- lokacje pamieci
 
 data Env = Env { 
-    varEnv :: M.Map String Loc,
-    inWhile :: Bool
+    varEnv :: M.Map String Loc
 }
 
 type Mem  = M.Map Loc TypeOfResult
@@ -99,6 +100,7 @@ transTopDefs (y:ys) = case y of
         modifyMem (M.insert l e)
         local (\e -> e { varEnv = M.insert id l (varEnv e) } ) (transTopDefs ys)
 
+-- dodaje globalną funkcje
 transFnDef :: G.FnDef -> Result()
 transFnDef x = case x of
   G.FnDef _ type_ ident args block -> do
@@ -108,7 +110,6 @@ transFnDef x = case x of
           "main" -> transBlock block >> return ()
           _ -> do
             modifyFuncMem(M.insert id (x, env))
-
 
 
 transBlockWithRet ::  G.Block -> Result TypeOfResult
@@ -304,9 +305,17 @@ transExpr x = case x of
                             liftIO $ putStrLn (prettyPrint e)
                             return $ MyBool True
                   _ -> do
-                    (st,l,funcMem) <- get
-                    let Just (fun, env) = M.lookup id funcMem
-                    local (\e -> e) (transAppFunc fun exprs env)
+                    (st,_,globFunc) <- get
+                    env <- ask
+                    let ml = M.lookup id (varEnv env)
+                    case ml of
+                      Nothing -> do
+                        -- wez funkcje globalna
+                        let Just (fun, env) = M.lookup id globFunc
+                        local (\e -> e) (transAppFunc fun exprs env)
+                      Just l -> do
+                        let Just (MyFunc func old_env) = M.lookup l st
+                        local (\e -> e) (transAppFunc func exprs old_env)
                     
                     
   G.EString _ string -> return $ MyStr string
@@ -377,7 +386,7 @@ interpret = transProgram
 first (a, b,c) = a
 
 runInterpreter program = 
-    let (newEnv, newState) = (Env { varEnv = M.empty, inWhile = False }, (M.empty, 0, M.empty))
+    let (newEnv, newState) = (Env { varEnv = M.empty }, (M.empty, 0, M.empty))
     in do 
     (res, a) <- runReaderT (runStateT (runExceptT (interpret program)) newState) newEnv
     return res

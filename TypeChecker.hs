@@ -202,10 +202,11 @@ transTopDefs (y:ys) = case y of
 checkIfAvailableFunc :: String -> Env -> G.BNFC'Position -> Result ()
 checkIfAvailableFunc id env pos = do
           when (id == "print") $ throwError $ show $ ErrorUsedName "function" id pos
-          let i = M.lookup id (varType env)
+          when (id == "main") $ throwError $ show $ ErrorUsedName "function" id pos
+          let i = Set.member id (names env)
           case i of
-            Nothing -> return ()
-            Just _ -> throwError $ show $ ErrorUsedName "function" id pos
+            False -> return ()
+            True -> throwError $ show $ ErrorUsedName "function" id pos
 
 checkIfAvailableVar :: String -> G.BNFC'Position -> Result ()
 checkIfAvailableVar id pos = do
@@ -224,7 +225,14 @@ transStmts (x:xs) = case x of
   
   G.Decl _ topdef -> case topdef of
     
-      G.Fn _ fndef -> undefined
+      G.Fn _ (G.FnDef pos type_ ident args block) -> do
+            id <- transIdent ident
+            env <- ask
+            checkIfAvailableFunc id env pos
+            ret_type <- transType type_
+            args_type <- transArg args []
+            let res = MyFunc ret_type args_type 
+            local (\e -> e { varType = M.insert id res (varType e), names = Set.insert id ( names e )  }) (transStmts xs)
 
       G.VarDef pos type_ item -> case item of
           G.NoInit _ ident -> do
