@@ -33,6 +33,7 @@ data Env = Env {
     varType :: M.Map String Type, 
     retType :: Maybe Type,
     ret :: Bool,
+    inWhile :: Bool,
     names :: Set.Set String
 }
 
@@ -52,6 +53,7 @@ data MyError = ErrorTypeMismatch Type Type G.BNFC'Position
              | ErrorPrint Int G.BNFC'Position
              | ErrorReference String Int G.BNFC'Position
              | ErrorUsedName String String G.BNFC'Position
+             | ErrorWhile String G.BNFC'Position
 
 
 printPos Nothing = ""
@@ -75,6 +77,7 @@ instance Show MyError where
   show (ErrorPrint nb pos) = "PrintError \n Error in usage of print" ++ printPos pos ++ "\nType of argument number " ++ show nb ++ " is void, print argument cannot be void"
   show (ErrorReference name nb pos) = "ReferenceError \n Error in use of function " ++ name ++ printPos pos ++ ", argument number " ++ show nb ++ " is not a variable, \n argument passed by reference must be a variable"
   show (ErrorUsedName what name pos) = "UsedNameError\n Error in " ++ what ++ " declaration" ++ printPos pos ++ "\n Name " ++ name ++ " is already in use"
+  show (ErrorWhile name pos) = "WhileError \n incorrect use of " ++ name  ++ printPos pos ++ " - " ++ name ++ " used not in while loop"
 
 transIdent :: G.Ident -> Result String
 transIdent x = case x of
@@ -297,13 +300,24 @@ transStmts (x:xs) = case x of
   G.While pos expr block -> do
           e <- transExpr expr
           when (e /= MyBool) $ throwError $ show $ ErrorTypeMismatch MyBool e pos
-          transBlock block
+          local (\e -> e { inWhile = True }) (transBlock block)
           transStmts xs
 
   G.SExp _ expr -> transExpr expr >> transStmts xs -- aplikacja funkcji
 
-  G.Break _ -> undefined
-  G.Continue _ -> undefined
+  G.Break pos -> do
+          env <- ask
+          let i = inWhile env
+          case i of
+            True -> transStmts xs
+            False -> throwError $ show $ ErrorWhile "break" pos
+            
+  G.Continue pos -> do
+          env <- ask
+          let i = inWhile env
+          case i of
+            True -> transStmts xs
+            False -> throwError $ show $ ErrorWhile "continue" pos
 
 ensureMyInt pos expr = do
         t <- transExpr expr
@@ -417,7 +431,7 @@ transType x = case x of
   G.MyVoid _ -> return MyVoid
 
 
-runEnvR r = runReader r Env { varType = M.empty, retType = Nothing, ret = False, names = Set.empty } 
+runEnvR r = runReader r Env { varType = M.empty, retType = Nothing, ret = False, inWhile = False, names = Set.empty} 
 
 runResult :: Result a -> Either String a
 runResult t = runEnvR $ runExceptT t

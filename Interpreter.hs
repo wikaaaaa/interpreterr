@@ -22,11 +22,18 @@ data TypeOfResult = MyInt Integer
                   | MyStr String
                   | MyBool Bool
                   | MyVoid
+                  | MyBreak
+                  | MyContinue
   deriving (Show)
 
 
 type Loc = Int -- lokacje pamieci
-type Env = M.Map String Loc
+
+data Env = Env { 
+    varEnv :: M.Map String Loc,
+    inWhile :: Bool
+}
+
 type Mem  = M.Map Loc TypeOfResult
 type FuncMem = M.Map String (G.FnDef, Env)
 type Store = (Mem, Loc, FuncMem)
@@ -82,7 +89,7 @@ transTopDefs (y:ys) = case y of
         id <- transIdent ident
         --let i = MyInt 0
         -- modifyMem (M.insert l i)
-        local (M.insert id l) (transTopDefs ys)
+        local (\e -> e { varEnv = M.insert id l (varEnv e) } ) (transTopDefs ys)
 
 
       G.Init _ ident expr -> do
@@ -90,7 +97,7 @@ transTopDefs (y:ys) = case y of
         l <- newloc
         id <- transIdent ident
         modifyMem (M.insert l e)
-        local (M.insert id l) (transTopDefs ys)
+        local (\e -> e { varEnv = M.insert id l (varEnv e) } ) (transTopDefs ys)
 
 transFnDef :: G.FnDef -> Result()
 transFnDef x = case x of
@@ -107,12 +114,12 @@ transFnDef x = case x of
 transBlockWithRet ::  G.Block -> Result TypeOfResult
 transBlockWithRet x = case x of
   G.Block _ stmts -> do
-    Just ret <- transStmts stmts
+    ret <- transStmts stmts
     return ret
 
-transBlock ::  G.Block -> Result ()
+transBlock ::  G.Block -> Result TypeOfResult
 transBlock x = case x of
-  G.Block _ stmts -> transStmts stmts >> return ()
+  G.Block _ stmts -> transStmts stmts
 
 incResult :: TypeOfResult -> TypeOfResult
 incResult (MyInt n) = MyInt (n + 1)
@@ -121,11 +128,11 @@ decResult :: TypeOfResult -> TypeOfResult
 decResult (MyInt n) = MyInt (n - 1)
 
 
-transStmts ::  [G.Stmt ] -> Result (Maybe TypeOfResult)
-transStmts [] = return Nothing
+transStmts ::  [G.Stmt ] -> Result TypeOfResult
+transStmts [] = return MyVoid -- ?
 transStmts (x:xs) = case x of
 
-  G.Empty _ -> return Nothing
+  G.Empty _ -> return MyVoid -- ?
   
   G.Decl _ topdef -> case topdef of
     
@@ -137,20 +144,20 @@ transStmts (x:xs) = case x of
             id <- transIdent ident
             --let i = MyInt 0
             --modifyMem (M.insert l i)
-            local (M.insert id l) (transStmts xs)
+            local (\e -> e { varEnv = M.insert id l (varEnv e) } ) (transStmts xs)
 
           G.Init _ ident expr -> do
             e <- transExpr expr
             l <- newloc
             id <- transIdent ident
             modifyMem (M.insert l e)
-            local (M.insert id l) (transStmts xs)
+            local (\e -> e { varEnv = M.insert id l (varEnv e) } ) (transStmts xs)
 
   -- zakładając ze zmienna byla wczesniej zadeklarowana
   G.Ass _ ident expr -> do
           env <- ask
           id <- transIdent ident
-          let Just l = M.lookup id env
+          let Just l = M.lookup id (varEnv env)
           w <- transExpr expr
           modifyMem $ M.insert l w
           transStmts xs
@@ -158,7 +165,7 @@ transStmts (x:xs) = case x of
   G.Incr pos ident -> do
           env <- ask
           id <- transIdent ident
-          let Just l = M.lookup id env
+          let Just l = M.lookup id (varEnv env)
           (st,_,_)  <- get
           let val = M.lookup l st
           case val of
@@ -170,7 +177,7 @@ transStmts (x:xs) = case x of
   G.Decr pos ident -> do
           env <- ask
           id <- transIdent ident
-          let Just l = M.lookup id env
+          let Just l = M.lookup id (varEnv env)
           (st,_,_)  <- get
           let val = M.lookup l st
           case val of
@@ -180,28 +187,54 @@ transStmts (x:xs) = case x of
 
   G.Ret _ expr -> do 
             e <- transExpr expr
-            return $ Just e
+            return e
           
-  G.VRet _ -> return $ Just MyVoid
+  G.VRet _ -> return MyVoid
 
   G.Cond _ expr block -> do
           MyBool e <- transExpr expr
-          if e==True then transBlock block >> transStmts xs else transStmts xs
-          
+          case e of
+            True -> do
+              ret <- transBlock block
+              case ret of
+                MyBreak -> return MyBreak
+                MyContinue -> return MyContinue
+                _ -> transStmts xs 
+            False -> transStmts xs
 
 
   G.CondElse _ expr block1 block2 -> do
           MyBool e <- transExpr expr
-          if e==True then transBlock block1 >> transStmts xs else transBlock block2 >> transStmts xs
+          case e of
+            True -> do
+              ret <- transBlock block1
+              case ret of
+                MyBreak -> return MyBreak
+                MyContinue -> return MyContinue
+                _ -> transStmts xs 
+            False -> do
+              ret <- transBlock block2
+              case ret of
+                MyBreak -> return MyBreak
+                MyContinue -> return MyContinue
+                _ -> transStmts xs 
 
   G.While pos expr block -> do
           MyBool w <- transExpr expr
-          if w==False then transStmts xs else transBlock block >> transStmts ((G.While pos expr block):xs)
+          case w of
+            False -> transStmts xs
+            True -> do
+              ret <- transBlock block
+              case ret of
+                MyBreak -> transStmts xs
+                _ -> transStmts ((G.While pos expr block):xs)
+              
 
   G.SExp _ expr -> transExpr expr >> transStmts xs -- aplikacja funkcji
 
-  G.Break _ -> undefined
-  G.Continue _ -> undefined
+  G.Break _ -> return MyBreak
+
+  G.Continue _ -> return MyContinue
 
 
 -- mapa z argumentami
@@ -224,7 +257,7 @@ doFunc (arg:args) (expr:exprs) env = do
                               id <- transIdent ident
                               l <- newloc
                               modifyMem (M.insert l e)
-                              let new_env = M.insert id l env
+                              let new_env = env { varEnv = M.insert id l (varEnv env) }
                               doFunc args exprs new_env
 
                 G.ArgRef _ type_ ident -> do 
@@ -232,8 +265,8 @@ doFunc (arg:args) (expr:exprs) env = do
                               let G.EVar _ old_ident = expr
                               old_id <- transIdent old_ident
                               old_env <- ask
-                              let Just l = M.lookup old_id old_env
-                              let new_env = M.insert new_id l env
+                              let Just l = M.lookup old_id (varEnv old_env)
+                              let new_env =  env { varEnv = M.insert new_id l (varEnv env) }
                               doFunc args exprs new_env
 
 
@@ -252,7 +285,7 @@ transExpr x = case x of
   G.EVar pos ident -> do
               env <- ask
               id <-  transIdent ident
-              let Just l = M.lookup id env
+              let Just l = M.lookup id (varEnv env)
               (st,_,_)  <- get
               let val = M.lookup l st
               case val of
@@ -344,7 +377,7 @@ interpret = transProgram
 first (a, b,c) = a
 
 runInterpreter program = 
-    let (newEnv, newState) = (M.empty, (M.empty, 0, M.empty))
+    let (newEnv, newState) = (Env { varEnv = M.empty, inWhile = False }, (M.empty, 0, M.empty))
     in do 
     (res, a) <- runReaderT (runStateT (runExceptT (interpret program)) newState) newEnv
     return res
