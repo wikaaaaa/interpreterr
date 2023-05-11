@@ -230,7 +230,10 @@ transStmts (x:xs) = case x of
             env <- ask
             checkIfAvailableFunc id env pos
             ret_type <- transType type_
+            new_env <- addArgToEnv args env
             args_type <- transArg args []
+            returned_type <- local (\e -> new_env) (transBlockWithRet block id pos)
+            when (returned_type /= ret_type) $ throwError $ show $ ErrorReturnTypeMismatch id ret_type returned_type pos
             let res = MyFunc ret_type args_type 
             local (\e -> e { varType = M.insert id res (varType e), names = Set.insert id ( names e )  }) (transStmts xs)
 

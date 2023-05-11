@@ -1,0 +1,12 @@
+def void main() {
+    var int x = 6;
+    var bool y = true;
+
+    if (y) {
+        var int y = 8;
+        fn print(y);
+    }
+    
+    var bool x = true;
+    return;
+}

@@ -136,8 +136,16 @@ transStmts (x:xs) = case x of
   G.Empty _ -> return MyVoid -- ?
   
   G.Decl _ topdef -> case topdef of
+
+      G.Fn _ func -> case func of
+        G.FnDef _ type_ ident args block -> do
+            id <- transIdent ident
+            env <- ask
+            let new_func = MyFunc func env
+            l <- newloc
+            modifyMem(M.insert l new_func)
+            local (\e -> e { varEnv = M.insert id l (varEnv e) } ) (transStmts xs)
     
-      G.Fn _ fndef -> undefined
 
       G.VarDef _ type_ item -> case item of
           G.NoInit _ ident -> do
