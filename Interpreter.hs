@@ -22,6 +22,8 @@ data TypeOfResult = MyInt Integer
                   | MyStr String
                   | MyBool Bool
                   | MyVoid
+                  | MyBreak
+                  | MyContinue
   deriving (Show)
 
 
@@ -112,12 +114,12 @@ transFnDef x = case x of
 transBlockWithRet ::  G.Block -> Result TypeOfResult
 transBlockWithRet x = case x of
   G.Block _ stmts -> do
-    Just ret <- transStmts stmts
+    ret <- transStmts stmts
     return ret
 
-transBlock ::  G.Block -> Result ()
+transBlock ::  G.Block -> Result TypeOfResult
 transBlock x = case x of
-  G.Block _ stmts -> transStmts stmts >> return ()
+  G.Block _ stmts -> transStmts stmts
 
 incResult :: TypeOfResult -> TypeOfResult
 incResult (MyInt n) = MyInt (n + 1)
@@ -126,11 +128,11 @@ decResult :: TypeOfResult -> TypeOfResult
 decResult (MyInt n) = MyInt (n - 1)
 
 
-transStmts ::  [G.Stmt ] -> Result (Maybe TypeOfResult)
-transStmts [] = return Nothing
+transStmts ::  [G.Stmt ] -> Result TypeOfResult
+transStmts [] = return MyVoid -- ?
 transStmts (x:xs) = case x of
 
-  G.Empty _ -> return Nothing
+  G.Empty _ -> return MyVoid -- ?
   
   G.Decl _ topdef -> case topdef of
     
@@ -185,28 +187,54 @@ transStmts (x:xs) = case x of
 
   G.Ret _ expr -> do 
             e <- transExpr expr
-            return $ Just e
+            return e
           
-  G.VRet _ -> return $ Just MyVoid
+  G.VRet _ -> return MyVoid
 
   G.Cond _ expr block -> do
           MyBool e <- transExpr expr
-          if e==True then transBlock block >> transStmts xs else transStmts xs
-          
+          case e of
+            True -> do
+              ret <- transBlock block
+              case ret of
+                MyBreak -> return MyBreak
+                MyContinue -> return MyContinue
+                _ -> transStmts xs 
+            False -> transStmts xs
 
 
   G.CondElse _ expr block1 block2 -> do
           MyBool e <- transExpr expr
-          if e==True then transBlock block1 >> transStmts xs else transBlock block2 >> transStmts xs
+          case e of
+            True -> do
+              ret <- transBlock block1
+              case ret of
+                MyBreak -> return MyBreak
+                MyContinue -> return MyContinue
+                _ -> transStmts xs 
+            False -> do
+              ret <- transBlock block2
+              case ret of
+                MyBreak -> return MyBreak
+                MyContinue -> return MyContinue
+                _ -> transStmts xs 
 
   G.While pos expr block -> do
           MyBool w <- transExpr expr
-          if w==False then transStmts xs else transBlock block >> transStmts ((G.While pos expr block):xs)
+          case w of
+            False -> transStmts xs
+            True -> do
+              ret <- transBlock block
+              case ret of
+                MyBreak -> transStmts xs
+                _ -> transStmts ((G.While pos expr block):xs)
+              
 
   G.SExp _ expr -> transExpr expr >> transStmts xs -- aplikacja funkcji
 
-  G.Break _ -> undefined
-  G.Continue _ -> undefined
+  G.Break _ -> return MyBreak
+
+  G.Continue _ -> return MyContinue
 
 
 -- mapa z argumentami

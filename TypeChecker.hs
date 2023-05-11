@@ -33,7 +33,7 @@ data Env = Env {
     varType :: M.Map String Type, 
     retType :: Maybe Type,
     ret :: Bool,
-    inWhile :: Bool
+    inWhile :: Bool,
     names :: Set.Set String
 }
 
@@ -53,7 +53,7 @@ data MyError = ErrorTypeMismatch Type Type G.BNFC'Position
              | ErrorPrint Int G.BNFC'Position
              | ErrorReference String Int G.BNFC'Position
              | ErrorUsedName String String G.BNFC'Position
-             | ErrorBreak G.BNFC'Position
+             | ErrorWhile String G.BNFC'Position
 
 
 printPos Nothing = ""
@@ -77,7 +77,7 @@ instance Show MyError where
   show (ErrorPrint nb pos) = "PrintError \n Error in usage of print" ++ printPos pos ++ "\nType of argument number " ++ show nb ++ " is void, print argument cannot be void"
   show (ErrorReference name nb pos) = "ReferenceError \n Error in use of function " ++ name ++ printPos pos ++ ", argument number " ++ show nb ++ " is not a variable, \n argument passed by reference must be a variable"
   show (ErrorUsedName what name pos) = "UsedNameError\n Error in " ++ what ++ " declaration" ++ printPos pos ++ "\n Name " ++ name ++ " is already in use"
-  show (ErrorBreak pos) = "BreakError \n incorrect use of break" ++ printPos pos ++ ", break used not in while loop"
+  show (ErrorWhile name pos) = "WhileError \n incorrect use of " ++ name  ++ printPos pos ++ " - " ++ name ++ " used not in while loop"
 
 transIdent :: G.Ident -> Result String
 transIdent x = case x of
@@ -310,10 +310,14 @@ transStmts (x:xs) = case x of
           let i = inWhile env
           case i of
             True -> transStmts xs
-            False -> throwError $ show $ ErrorBreak pos
+            False -> throwError $ show $ ErrorWhile "break" pos
             
-
-  G.Continue _ -> undefined
+  G.Continue pos -> do
+          env <- ask
+          let i = inWhile env
+          case i of
+            True -> transStmts xs
+            False -> throwError $ show $ ErrorWhile "continue" pos
 
 ensureMyInt pos expr = do
         t <- transExpr expr

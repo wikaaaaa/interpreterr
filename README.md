@@ -19,7 +19,7 @@ Można też uruchomić interperter bez podawania nazwy pliku, wtedy można poda�
 ***
 
 Są pewne różnice względem wstępnej deklaracji, np:
-* tablice, krotki, funkcje zagnieżdzone, break i continue nie zostały zaimplementowane w tej części
+* tablice, krotki, funkcje zagnieżdzone nie zostały zaimplementowane w tej części
     * funkcje zagnieżdzone, break i continue są w gramatyce, a w interpreterze jest undefined
     * tablic i krotek nie ma na razie w gramatyce i aktualnej deklaracji
 * Plik deklaracja.pdf zawiera aktualną deklarację języka
@@ -46,8 +46,8 @@ AKTUALNA TABELA CECH:
     -  13 (2) (funkcje zagnieżdżone ze statycznym wiązaniem)
     -  14 (1/2) (rekordy/listy/tablice/tablice wielowymiarowe)
     -  15 (2) (krotki z przypisaniem)
-    -  16 (1) (break, continue)
+    +  16 (1) (break, continue)
     -  17 (4) (funkcje wyższego rzędu, anonimowe, domknięcia)
     -  18 (3) (generatory)
 
-Razem: 24
+Razem: 25
