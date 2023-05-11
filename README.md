@@ -3,6 +3,7 @@
 Iterpreter języka imperatywnego, wzorowanego na języku Latte.
 * Gramatyka języka znajduję się w pliku gramar.cf
 * Deklaracja języka znajduję się w pliku deklaracja.pdf
+* Gramatyka Latte, na której wzorowany jest język: https://www.mimuw.edu.pl/~ben/Zajecia/Mrj2022/Latte/Latte.cf
 
 ***
 
@@ -18,12 +19,14 @@ Można też uruchomić interperter bez podawania nazwy pliku, wtedy można poda�
 ***
 
 Są pewne różnice względem wstępnej deklaracji, np:
-* tablilce, krotki, funkcje zagnieżdzone, break i continue nie zostały zaimplementowane w tej części
+* tablice, krotki, funkcje zagnieżdzone, break i continue nie zostały zaimplementowane w tej części
+    * funkcje zagnieżdzone, break i continue są w gramatyce, a w interpreterze jest undefined
+    * tablic i krotek nie ma na razie w gramatyce i aktualnej deklaracji
 * Plik deklaracja.pdf zawiera aktualną deklarację języka
 
 ***
 
-TABELA CECH:
+AKTUALNA TABELA CECH:
 
     Na 15 punktów
     +  01 (trzy typy)
