@@ -19,9 +19,12 @@ Można też uruchomić interperter bez podawania nazwy pliku, wtedy można poda�
 ***
 
 Są pewne różnice względem wstępnej deklaracji, np:
-* tablice, krotki, funkcje zagnieżdzone nie zostały zaimplementowane w tej części
-    * funkcje zagnieżdzone, break i continue są w gramatyce, a w interpreterze jest undefined
-    * tablic i krotek nie ma na razie w gramatyce i aktualnej deklaracji
+* tablice i krotki zostaną zaimplementowane w drugim terminie
+* doprecyzowanie struktury funkcji, m.in.:
+    * każda funkcja musi zawierać return
+    * return musi znajdować się na końcu bloku
+    * jeden return na jedną funkcę
+    * return nie może zjadować się w zagnieżdzonych blokach ( while i if )
 * Plik deklaracja.pdf zawiera aktualną deklarację języka
 
 ***
@@ -43,11 +46,11 @@ AKTUALNA TABELA CECH:
     +  11 (funkcje zwracające wartość)
     Na 30 punktów
     +  12 (4) (statyczne typowanie)
-    -  13 (2) (funkcje zagnieżdżone ze statycznym wiązaniem)
+    +  13 (2) (funkcje zagnieżdżone ze statycznym wiązaniem)
     -  14 (1/2) (rekordy/listy/tablice/tablice wielowymiarowe)
     -  15 (2) (krotki z przypisaniem)
     +  16 (1) (break, continue)
     -  17 (4) (funkcje wyższego rzędu, anonimowe, domknięcia)
     -  18 (3) (generatory)
 
-Razem: 25
+Razem: 27
