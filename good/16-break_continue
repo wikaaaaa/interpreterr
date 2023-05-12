@@ -1,0 +1,25 @@
+def void main() {
+    var int x = 0;
+    while (true) {
+        fn print("beginning of while ", x);
+        if (x == 2) {
+            x++;
+            continue;
+        }
+        if (x == 4) {
+            break;
+        }
+        x++;
+        var int y = 3;
+        while (true) {
+            fn print ("       wewnętrzna pętla");
+            if (y == 0) {
+                break;
+            }
+            y--;
+        }        
+        fn print("end of while");
+    }
+    fn print(x);
+    return;
+}

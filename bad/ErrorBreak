@@ -1,0 +1,9 @@
+def void main() {
+    var int x = 4;
+    while (x > 0) {
+        break;
+    }
+    break;
+    fn print(x);
+    return;
+}
