@@ -19,12 +19,12 @@ Można też uruchomić interperter bez podawania nazwy pliku, wtedy można poda�
 ***
 
 Są pewne różnice względem wstępnej deklaracji, np:
-* tablice i krotki zostaną zaimplementowane w drugim terminie
+* tablice i krotki zostaną zaimplementowane dopiero w drugim terminie
 * doprecyzowanie struktury funkcji, m.in.:
     * każda funkcja musi zawierać return
     * return musi znajdować się na końcu bloku
-    * jeden return na jedną funkcę
-    * return nie może zjadować się w zagnieżdzonych blokach ( while i if )
+    * jeden return na jedną funkcję
+    * return nie może znajdować się w zagnieżdzonych blokach while i if
 * Plik deklaracja.pdf zawiera aktualną deklarację języka
 
 ***
