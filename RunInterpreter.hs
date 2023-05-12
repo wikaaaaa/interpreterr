@@ -26,8 +26,8 @@ import ParGramar   ( pProgram, myLexer )
 import PrintGramar ( Print, printTree )
 import SkelGramar  ()
 
-import Interpreter
-import TypeChecker
+import Interpreter.Interpreter
+import TypeChecker.TypeChecker
 
 type Err        = Either String
 type ParseFun a = [Token] -> Err a

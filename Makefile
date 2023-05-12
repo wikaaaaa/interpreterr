@@ -3,5 +3,6 @@ interpreter:
 	make -C generated
 	ghc -i.:generated RunInterpreter.hs -o interpreter
 clean:
-	rm -f *.o *.hi interpreter
+	rm -f *.o *.hi interpreter TypeChecker/*.o TypeChecker/*.hi Interpreter/*.o Interpreter/*.hi
 	make -C generated distclean
+	
