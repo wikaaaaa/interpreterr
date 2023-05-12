@@ -18,7 +18,7 @@ import Control.Monad.Except
 import qualified Data.Set as Set
 
 
-data Type = MyInt | MyBool | MyStr | MyVoid | MyFunc Type [Type] | MyRef Type
+data Type = MyInt | MyBool | MyStr | MyVoid | MyFunc Type [Type] | MyRef Type | MyNothing
     deriving(Eq)
 
 instance Show Type where
@@ -54,6 +54,7 @@ data MyError = ErrorTypeMismatch Type Type G.BNFC'Position
              | ErrorReference String Int G.BNFC'Position
              | ErrorUsedName String String G.BNFC'Position
              | ErrorWhile String G.BNFC'Position
+             | ErrorReturn String G.BNFC'Position
 
 
 printPos Nothing = ""
@@ -78,6 +79,8 @@ instance Show MyError where
   show (ErrorReference name nb pos) = "ReferenceError \n Error in use of function " ++ name ++ printPos pos ++ ", argument number " ++ show nb ++ " is not a variable, \n argument passed by reference must be a variable"
   show (ErrorUsedName what name pos) = "UsedNameError\n Error in " ++ what ++ " declaration" ++ printPos pos ++ "\n Name " ++ name ++ " is already in use"
   show (ErrorWhile name pos) = "WhileError \n incorrect use of " ++ name  ++ printPos pos ++ " - " ++ name ++ " used not in while loop"
+  show (ErrorReturn err_type pos) = "ReturnError\n " ++ "Return statement " ++ err_type ++ printPos pos
+
 
 transIdent :: G.Ident -> Result String
 transIdent x = case x of
@@ -96,14 +99,18 @@ transBlockWithRet x name pos = case x of
   G.Block _ stmts -> do
     ret <- local (\e -> e { names = Set.empty }) (transStmts stmts)
     case ret of
-      Nothing -> throwError $ show $ ErrorNoReturn name pos
-      Just r -> return r
+      MyNothing -> throwError $ show $ ErrorNoReturn name pos
+      _ -> return ret
 
-transBlock ::  G.Block -> Result Type
-transBlock x = case x of
-  G.Block _ stmts -> do
-    local (\e -> e { names = Set.empty }) (transStmts stmts)
-    return MyVoid
+-- block with no result statement
+transBlock ::  G.Block -> String -> Result ()
+transBlock (G.Block pos stmts) name = do
+          res <- local (\e -> e { names = Set.empty }) (transStmts stmts)
+          case res of 
+              MyNothing -> return ()
+              _ -> throwError $ show $ ErrorReturn ("istn't allowed in " ++ name ++ " block") pos
+
+    
 
 transArg :: [G.Arg] -> [Type] -> Result [Type]
 transArg [] res = return res
@@ -217,11 +224,11 @@ checkIfAvailableVar id pos = do
             True  -> throwError $ show $ ErrorUsedName "variable" id pos
 
 
-transStmts ::  [G.Stmt ] -> Result (Maybe Type)
-transStmts [] = return Nothing
+transStmts ::  [G.Stmt ] -> Result Type
+transStmts [] = return MyNothing
 transStmts (x:xs) = case x of
 
-  G.Empty _ -> return Nothing
+  G.Empty _ -> return MyNothing
   
   G.Decl _ topdef -> case topdef of
     
@@ -287,31 +294,38 @@ transStmts (x:xs) = case x of
                         when (tt /= MyInt) $ throwError $ show $ ErrorTypeMismatch MyInt tt pos
                         transStmts xs
 
-  G.Ret _ expr -> do 
+  G.Ret pos expr -> do 
             e <- transExpr expr
             -- sprawdzic czy return jest ostatnia operacja w bloku?
             -- sprawdzenie czy zwracany tym sie zgadza eh
-            return $ Just e
+            case xs of
+              [] -> return e
+              _ -> throwError $ show $ ErrorReturn " istn't last statement in block, return statement" pos
+            
           
-  G.VRet _ -> return $ Just (MyVoid)
+  G.VRet pos -> do
+          case xs of
+            [] -> return MyVoid
+            _ -> throwError $ show $ ErrorReturn " istn't last statement in block" pos
+         
 
   G.Cond pos expr block -> do
           e <- transExpr expr
           when (e /= MyBool) $ throwError $ show $ ErrorTypeMismatch MyBool e pos
-          transBlock block
+          transBlock block "'if'"
           transStmts xs
           
   G.CondElse pos expr block1 block2 -> do
           e <- transExpr expr
           when (e /= MyBool) $ throwError $ show $ ErrorTypeMismatch MyBool e pos
-          transBlock block2
-          transBlock block1
+          transBlock block2 "'else'"
+          transBlock block1 "'if'"
           transStmts xs
 
   G.While pos expr block -> do
           e <- transExpr expr
           when (e /= MyBool) $ throwError $ show $ ErrorTypeMismatch MyBool e pos
-          local (\e -> e { inWhile = True }) (transBlock block)
+          local (\e -> e { inWhile = True }) (transBlock block "'while'")
           transStmts xs
 
   G.SExp _ expr -> transExpr expr >> transStmts xs -- aplikacja funkcji

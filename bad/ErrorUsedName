@@ -1,12 +1,21 @@
-def void f () {
+def void f1 () {
     return;
 }
 
-def int f (int x) {
-    return x;
-}
-
 def void main() {
+
+    def int f1 (int x) { # nie zwraca błędu
+        return x;
+    }
+
+    def void f2 () {
+        return;
+    }
+
+    def void f2 () { # zwraca błąd
+        return;
+    }
+
     fn print("ok");
     return;
 

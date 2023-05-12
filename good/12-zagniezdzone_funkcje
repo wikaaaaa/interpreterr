@@ -1,0 +1,19 @@
+def void func() {
+    fn print("hello from func 0");
+    return;
+}
+ 
+def void main() {
+    fn func();
+    def void func() {
+        fn print("hello from func 1");
+        def void func() {
+            fn print("hello from func 2");
+            return ;
+        }
+        fn func();
+        return;
+    }
+    fn func();
+    return;
+}

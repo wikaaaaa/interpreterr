@@ -1,0 +1,24 @@
+def int fibonacci(int n) {
+  var int res;
+  if (n == 0) {
+    res = 0;
+  } else {
+    if (n == 1) {
+      res = 1;
+    } else {
+      res = fn fibonacci(n - 1) + fn fibonacci(n - 2);
+    }
+  }
+  return res;
+}
+
+def void main() {
+  var int n = 10;
+  var int result = fn fibonacci(n);
+  if (result == 55) {
+    fn print("ok");
+  } else {
+    fn print("not ok");
+  }
+  return;
+}
