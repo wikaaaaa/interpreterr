@@ -23,9 +23,8 @@ transBlockWithRet (G.Block _ stmts) name pos = do
         MyNothing -> throwError $ show $ ErrorNoReturn name pos
         _ -> return ret
 
--- block with no result statement
-transBlock ::  G.Block -> String -> Result ()
-transBlock (G.Block pos stmts) name = do
+transBlockNoRet ::  G.Block -> String -> Result ()
+transBlockNoRet (G.Block pos stmts) name = do
     res <- local (\e -> e { names = Set.empty }) (transStmts stmts)
     case res of 
         MyNothing -> return ()
@@ -125,7 +124,7 @@ transTopDefs (y:ys) = case y of
                 ret_type <- transType type_
                 returned_type <- local (\e -> new_env) (transBlockWithRet block id pos)
                 when (returned_type /= ret_type) $ throwError $ show $ ErrorReturnTypeMismatch id ret_type returned_type pos
-                local (\e -> e) (transTopDefs ys) -- moze ten local nie jest niebedny
+                local (\e -> e) (transTopDefs ys)
 
     G.VarDef pos type_ item -> case item of
         G.NoInit _ ident -> do
@@ -179,7 +178,6 @@ transStmts (x:xs) = case x of
                 when (e /= t) $ throwError $ show $ ErrorTypeMismatch t e pos
                 local (\e -> e { varType = M.insert id t (varType e) , names = Set.insert id ( names e ) }) (transStmts xs)
 
-    -- zakładając ze zmienna byla wczesniej zadeklarowana
     G.Ass pos ident expr -> do
         t <- transExpr expr
         id <- transIdent ident
@@ -190,7 +188,6 @@ transStmts (x:xs) = case x of
             Just tt -> do
                 when (tt /= t) $ throwError $ show $ ErrorTypeMismatch tt t pos
                 transStmts xs
-                
 
     G.Incr pos ident -> do
         id <- transIdent ident
@@ -200,8 +197,7 @@ transStmts (x:xs) = case x of
             Nothing -> throwError $ show $ ErrorUndefinedVariable id pos
             Just tt -> do
                         when (tt /= MyInt) $ throwError $ show $ ErrorTypeMismatch MyInt tt pos
-                        transStmts xs
-                                
+                        transStmts xs                     
 
     G.Decr pos ident -> do
         id <- transIdent ident
@@ -215,36 +211,32 @@ transStmts (x:xs) = case x of
 
     G.Ret pos expr -> do 
         e <- transExpr expr
-        -- sprawdzic czy return jest ostatnia operacja w bloku?
-        -- sprawdzenie czy zwracany tym sie zgadza eh
         case xs of
             [] -> return e
             _ -> throwError $ show $ ErrorReturn " istn't last statement in block, return statement" pos
                 
-            
     G.VRet pos -> do
         case xs of
             [] -> return MyVoid
-            _ -> throwError $ show $ ErrorReturn " istn't last statement in block" pos
-            
+            _ -> throwError $ show $ ErrorReturn " istn't last statement in block, return statement" pos
 
     G.Cond pos expr block -> do
         e <- transExpr expr
         when (e /= MyBool) $ throwError $ show $ ErrorTypeMismatch MyBool e pos
-        transBlock block "'if'"
+        transBlockNoRet block "'if'"
         transStmts xs
             
     G.CondElse pos expr block1 block2 -> do
         e <- transExpr expr
         when (e /= MyBool) $ throwError $ show $ ErrorTypeMismatch MyBool e pos
-        transBlock block2 "'else'"
-        transBlock block1 "'if'"
+        transBlockNoRet block2 "'else'"
+        transBlockNoRet block1 "'if'"
         transStmts xs
 
     G.While pos expr block -> do
         e <- transExpr expr
         when (e /= MyBool) $ throwError $ show $ ErrorTypeMismatch MyBool e pos
-        local (\e -> e { inWhile = True }) (transBlock block "'while'")
+        local (\e -> e { inWhile = True }) (transBlockNoRet block "'while'")
         transStmts xs
 
     G.SExp _ expr -> transExpr expr >> transStmts xs
@@ -266,6 +258,7 @@ transStmts (x:xs) = case x of
 
 transExpr ::  G.Expr -> Result Type
 transExpr x = case x of
+
     G.EVar pos ident -> do
         id <- transIdent ident
         env <- ask
@@ -273,7 +266,6 @@ transExpr x = case x of
         case i of
             Nothing -> throwError $ show $ ErrorUndefinedVariable id pos
             Just t -> return t 
-          
 
     G.ELitInt _ integer -> return MyInt
     G.ELitTrue _ -> return MyBool
@@ -344,7 +336,6 @@ transExpr x = case x of
         ensureMyType pos e1 MyBool
         ensureMyType pos e2 MyBool
         return MyBool
-
 
 runEnvR r = runReader r Env { varType = M.empty, inWhile = False, names = Set.empty} 
 

@@ -58,7 +58,6 @@ instance Show MyError where
     show (ErrorReturn err_type pos) = "ReturnError\n " ++ "Return statement " ++ err_type ++ printPos pos
     show (ErrorNotFunction name pos) = "NotFunctionError \n" ++ name ++ " used" ++ printPos pos ++ " is a variable not a function"
 
-
 checkIfAvailableFunc :: String -> Env -> G.BNFC'Position -> Result ()
 checkIfAvailableFunc id env pos = do
     when (id == "print") $ throwError $ show $ ErrorUsedName "function" id pos
@@ -79,12 +78,10 @@ checkIfAvailableVar id pos = do
 ensureMyType pos t etype = do
     when (t /= etype) $ throwError $ show $ ErrorTypeMismatch etype t pos
 
-
 checkPrintArgs [] pos nb = return True
 checkPrintArgs (expr:exprs) pos nb = do
     when (expr == MyVoid) $ throwError $ show $ ErrorPrint nb pos
     checkPrintArgs exprs pos (nb+1)
-
 
 transIdent :: G.Ident -> Result String
 transIdent (G.Ident string) = return string

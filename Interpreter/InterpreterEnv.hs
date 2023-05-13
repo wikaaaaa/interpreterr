@@ -13,11 +13,8 @@ data TypeOfResult = MyInt Integer
                   | MyBreak
                   | MyContinue
                   | MyFunc G.FnDef Env
-  --deriving (Show)
 
--- zbior globalnych funckji, i jesli nie istnieje lokalna funckja o danej nazwie to wyboerz globalna 
-
-type Loc = Int -- lokacje pamieci
+type Loc = Int
 
 data Env = Env { 
     varEnv :: M.Map String Loc
@@ -26,6 +23,5 @@ data Env = Env {
 type Mem  = M.Map Loc TypeOfResult
 type FuncMem = M.Map String (G.FnDef, Env)
 type Store = (Mem, Loc, FuncMem)
---type Store = (Mem, Loc)
 
 type Result a = ExceptT String (StateT Store (ReaderT Env IO)) a
