@@ -1,0 +1,6 @@
+def void main() {
+    def void func (int x, int x) {
+        return;
+    }
+    return;
+}

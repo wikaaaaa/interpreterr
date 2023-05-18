@@ -18,14 +18,14 @@ transProgram (G.Program _ topdefs) = do
 
 transBlockWithRet ::  G.Block -> String -> G.BNFC'Position -> Result Type
 transBlockWithRet (G.Block _ stmts) name pos = do
-    ret <- local (\e -> e { names = Set.empty }) (transStmts stmts)
+    ret <- local (\e -> e) (transStmts stmts)
     case ret of
         MyNothing -> throwError $ show $ ErrorNoReturn name pos
         _ -> return ret
 
 transBlockNoRet ::  G.Block -> String -> Result ()
 transBlockNoRet (G.Block pos stmts) name = do
-    res <- local (\e -> e { names = Set.empty }) (transStmts stmts)
+    res <- local (\e -> e) (transStmts stmts)
     case res of 
         MyNothing -> return ()
         _ -> throwError $ show $ ErrorReturn ("istn't allowed in " ++ name ++ " block") pos
@@ -35,27 +35,30 @@ transArg [] res = return res
 transArg (x:xs) res =
     case x of
         G.Arg _ type_ ident -> do
-            t <- transType type_
+            t <- transTypeNotVoid type_
             transArg xs (res ++ [t]) 
         G.ArgRef _ type_ ident -> do
-            t <- transType type_
+            t <- transTypeNotVoid type_
             let ref_t = MyRef t 
             transArg xs (res ++ [ref_t])
 
 addArgToEnv :: [G.Arg] -> Env -> Result Env
 addArgToEnv [] env = return env
 addArgToEnv (x:xs) e = do
+
     case x of 
-        G.Arg _ type_ ident -> do
-            t <- transType type_
+        G.Arg pos type_ ident -> do
+            t <- transTypeNotVoid type_
             id <- transIdent ident
-            let new_env = e { varType = M.insert id t (varType e) }
+            checkIfAvailableVarInEnv id e pos
+            let new_env = e { varType = M.insert id t (varType e), names = Set.insert id ( names e ) }
             addArgToEnv xs new_env
 
-        G.ArgRef _ type_ ident -> do
-            t <- transType type_
+        G.ArgRef pos type_ ident -> do
+            t <- transTypeNotVoid type_
             id <- transIdent ident  
-            let new_env = e { varType = M.insert id t (varType e) }
+            checkIfAvailableVarInEnv id e pos
+            let new_env = e { varType = M.insert id t (varType e), names = Set.insert id ( names e ) }
             addArgToEnv xs new_env
 
 checkArgs :: [Type] -> [G.Expr] -> String -> G.BNFC'Position -> Int -> Result ()
@@ -114,13 +117,16 @@ transTopDefs (y:ys) = case y of
         case id of
             "main" -> do
                 ret_type <- transType type_
-                returned_type <- transBlockWithRet block id pos
+                env <- ask
+                let new_env = env { names = Set.empty }
+                returned_type <- local (\e -> new_env) (transBlockWithRet block id pos)
                 when (returned_type /= ret_type) $ throwError $ show $ ErrorReturnTypeMismatch id ret_type returned_type pos
                 return MyVoid
                   
             _ -> do
                 env <- ask
-                new_env <- addArgToEnv args env
+                let new_env = env { names = Set.insert id Set.empty }
+                new_env <- addArgToEnv args new_env
                 ret_type <- transType type_
                 returned_type <- local (\e -> new_env) (transBlockWithRet block id pos)
                 when (returned_type /= ret_type) $ throwError $ show $ ErrorReturnTypeMismatch id ret_type returned_type pos
@@ -130,14 +136,14 @@ transTopDefs (y:ys) = case y of
         G.NoInit _ ident -> do
             id <- transIdent ident
             checkIfAvailableVar id pos
-            t <- transType type_
+            t <- transTypeNotVoid type_
             local (\e -> e { varType = M.insert id t (varType e), names = Set.insert id ( names e ) } ) (transTopDefs ys)
 
         G.Init pos ident expr -> do
             e <- transExpr expr
             id <- transIdent ident
             checkIfAvailableVar id pos
-            t <- transType type_
+            t <- transTypeNotVoid type_
             when (e /= t) $ throwError $ show $ ErrorTypeMismatch t e pos
             local (\e -> e { varType = M.insert id t (varType e) , names = Set.insert id ( names e ) }) (transTopDefs ys)
 
@@ -155,18 +161,24 @@ transStmts (x:xs) = case x of
             env <- ask
             checkIfAvailableFunc id env pos
             ret_type <- transType type_
-            new_env <- addArgToEnv args env
             args_type <- transArg args []
+
+            let res = MyFunc ret_type args_type
+
+            let env_with_func = env { varType = M.insert id res (varType env), names = Set.insert id ( Set.empty )  }
+
+            new_env <- addArgToEnv args env_with_func
+            
             returned_type <- local (\e -> new_env) (transBlockWithRet block id pos)
             when (returned_type /= ret_type) $ throwError $ show $ ErrorReturnTypeMismatch id ret_type returned_type pos
-            let res = MyFunc ret_type args_type 
+            
             local (\e -> e { varType = M.insert id res (varType e), names = Set.insert id ( names e )  }) (transStmts xs)
 
         G.VarDef pos type_ item -> case item of
             G.NoInit _ ident -> do
                 id <- transIdent ident
                 checkIfAvailableVar id pos
-                t <- transType type_
+                t <- transTypeNotVoid type_
                 local (\e -> e { varType = M.insert id t (varType e), names = Set.insert id ( names e )  }) (transStmts xs)
 
 
@@ -174,7 +186,7 @@ transStmts (x:xs) = case x of
                 e <- transExpr expr
                 id <- transIdent ident
                 checkIfAvailableVar id pos
-                t <- transType type_
+                t <- transTypeNotVoid type_
                 when (e /= t) $ throwError $ show $ ErrorTypeMismatch t e pos
                 local (\e -> e { varType = M.insert id t (varType e) , names = Set.insert id ( names e ) }) (transStmts xs)
 
@@ -223,20 +235,20 @@ transStmts (x:xs) = case x of
     G.Cond pos expr block -> do
         e <- transExpr expr
         when (e /= MyBool) $ throwError $ show $ ErrorTypeMismatch MyBool e pos
-        transBlockNoRet block "'if'"
+        local (\e -> e {names = Set.empty}) (transBlockNoRet block "'if'")
         transStmts xs
             
     G.CondElse pos expr block1 block2 -> do
         e <- transExpr expr
         when (e /= MyBool) $ throwError $ show $ ErrorTypeMismatch MyBool e pos
-        transBlockNoRet block2 "'else'"
-        transBlockNoRet block1 "'if'"
+        local (\e -> e {names = Set.empty}) (transBlockNoRet block2 "'else'")
+        local (\e -> e {names = Set.empty}) (transBlockNoRet block1 "'if'")
         transStmts xs
 
     G.While pos expr block -> do
         e <- transExpr expr
         when (e /= MyBool) $ throwError $ show $ ErrorTypeMismatch MyBool e pos
-        local (\e -> e { inWhile = True }) (transBlockNoRet block "'while'")
+        local (\e -> e { inWhile = True, names = Set.empty }) (transBlockNoRet block "'while'")
         transStmts xs
 
     G.SExp _ expr -> transExpr expr >> transStmts xs

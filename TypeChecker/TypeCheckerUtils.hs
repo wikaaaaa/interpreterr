@@ -35,6 +35,7 @@ data MyError = ErrorTypeMismatch Type Type G.BNFC'Position
              | ErrorWhile String G.BNFC'Position
              | ErrorReturn String G.BNFC'Position
              | ErrorNotFunction String G.BNFC'Position
+             | ErrorVoid G.BNFC'Position
 
 instance Show MyError where
     show (ErrorTypeMismatch expected actual pos) = "TypesMismatchError \n expected type: " ++ show expected ++ ", actual type: " ++ show actual ++ printPos pos
@@ -57,6 +58,7 @@ instance Show MyError where
     show (ErrorWhile name pos) = "WhileError \n incorrect use of " ++ name  ++ printPos pos ++ " - " ++ name ++ " used not in while loop"
     show (ErrorReturn err_type pos) = "ReturnError\n " ++ "Return statement " ++ err_type ++ printPos pos
     show (ErrorNotFunction name pos) = "NotFunctionError \n" ++ name ++ " used" ++ printPos pos ++ " is a variable not a function"
+    show (ErrorVoid pos) = "VoidError\n type void not allowed" ++ printPos pos
 
 checkIfAvailableFunc :: String -> Env -> G.BNFC'Position -> Result ()
 checkIfAvailableFunc id env pos = do
@@ -75,6 +77,14 @@ checkIfAvailableVar id pos = do
         False -> return ()
         True  -> throwError $ show $ ErrorUsedName "variable" id pos
 
+
+checkIfAvailableVarInEnv :: String -> Env -> G.BNFC'Position -> Result ()
+checkIfAvailableVarInEnv id env pos = do
+    let i = Set.member id (names env)
+    case i of
+        False -> return ()
+        True  -> throwError $ show $ ErrorUsedName "argument" id pos
+
 ensureMyType pos t etype = do
     when (t /= etype) $ throwError $ show $ ErrorTypeMismatch etype t pos
 
@@ -92,3 +102,10 @@ transType x = case x of
     G.MyStr _ -> return MyStr
     G.MyBool _ -> return MyBool
     G.MyVoid _ -> return MyVoid
+
+transTypeNotVoid ::  G.Type -> Result Type
+transTypeNotVoid x = case x of
+    G.MyInt _ -> return MyInt
+    G.MyStr _ -> return MyStr
+    G.MyBool _ -> return MyBool
+    G.MyVoid pos -> throwError $ show $ ErrorVoid pos

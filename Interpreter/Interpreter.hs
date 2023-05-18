@@ -59,8 +59,12 @@ transStmts (x:xs) = case x of
             G.FnDef _ type_ ident args block -> do
                 id <- transIdent ident
                 env <- ask
-                let new_func = MyFunc func env
                 l <- newloc
+
+                let new_env = env { varEnv = M.insert id l (varEnv env) }
+
+                let new_func = MyFunc func new_env
+                
                 modifyMem(M.insert l new_func)
                 local (\e -> e { varEnv = M.insert id l (varEnv e) } ) (transStmts xs)
 

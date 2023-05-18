@@ -21,7 +21,7 @@ data Env = Env {
 }
 
 type Mem  = M.Map Loc TypeOfResult
-type FuncMem = M.Map String (G.FnDef, Env)
+type FuncMem = M.Map String (G.FnDef, Env) -- funkcje globalne
 type Store = (Mem, Loc, FuncMem)
 
 type Result a = ExceptT String (StateT Store (ReaderT Env IO)) a

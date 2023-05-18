@@ -1,5 +1,12 @@
 # interpreter
 
+Poprawka zawiera
+- rekurencje w lokalnych funkcjach (good/06-rekurencja_fib_lokalne)
+- sprawdzania czy argumenty nie są typy void (bad/ErrorVoid)
+- sprawdzanie czy nazwy argumentów się nie powtarzają (bad/ErrorUsedName_args)
+
+***
+
 Iterpreter języka imperatywnego, wzorowanego na języku Latte.
 * Gramatyka języka znajduję się w pliku gramar.cf
 * Deklaracja języka znajduję się w pliku deklaracja.pdf
