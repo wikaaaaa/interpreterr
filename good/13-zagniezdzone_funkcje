@@ -1,17 +1,17 @@
 def void func() {
-    fn print("hello from func 0");
+    fn print("hello from func glob");
     return;
 }
  
 def void main() {
     fn func();
     def void func() {
-        fn print("hello from func 1");
-        def void func() {
-            fn print("hello from func 2");
+        fn print("hello from func lok");
+        def void func1() {
+            fn print("hello from func1");
             return ;
         }
-        fn func();
+        fn func1();
         return;
     }
     fn func();
