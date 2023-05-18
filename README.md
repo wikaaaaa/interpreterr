@@ -2,8 +2,8 @@
 
 Poprawka zawiera
 - rekurencje w lokalnych funkcjach (good/06-rekurencja_fib_lokalne)
-- sprawdzania czy argumenty nie są typy void (bad/ErrorVoid)
-- sprawdzanie czy nazwy argumentów się nie powtarzają (bad/ErrorUsedName_args)
+- sprawdzenia, czy argumenty nie są typu void (bad/ErrorVoid)
+- sprawdzenie, czy nazwy argumentów się nie powtarzają (bad/ErrorUsedName_args)
 
 ***
 
