@@ -250,20 +250,36 @@ transExpr x = case x of
         return $ MyInt (op e1 e2)
 
     G.ERel _ expr1 relop expr2 ->  do
-        MyInt e1 <- transExpr expr1
-        MyInt e2 <- transExpr expr2
-        op <- transRelOp relop
-        return $ MyBool (op e1 e2)
+        e1t <- transExpr expr1
+        case e1t of
+            MyInt e1 -> do
+                MyInt e2 <- transExpr expr2
+                op <- transRelOpInt relop
+                return $ MyBool (op e1 e2)
+            MyBool e1 -> do
+                MyBool e2 <- transExpr expr2
+                op <- transRelOpBool relop
+                return $ MyBool (op e1 e2)
+            MyStr e1 -> do
+                MyStr e2 <- transExpr expr2
+                op <- transRelOpStr relop
+                return $ MyBool (op e1 e2)
 
     G.EAnd _ expr1 expr2 -> do
         MyBool e1 <- transExpr expr1
-        MyBool e2 <- transExpr expr2
-        return $ MyBool (e1 && e2)
-
+        case e1 of
+            True -> do
+                MyBool e2 <- transExpr expr2
+                return $ MyBool e2
+            False -> return $ MyBool False
+        
     G.EOr _ expr1 expr2 -> do
         MyBool e1 <- transExpr expr1
-        MyBool e2 <- transExpr expr2
-        return $ MyBool (e1 || e2)
+        case e1 of
+            True -> return $ MyBool True
+            False -> do
+                MyBool e2 <- transExpr expr2
+                return $ MyBool e2
 
 
 interpret :: G.Program -> Result () 

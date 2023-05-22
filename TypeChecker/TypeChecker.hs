@@ -331,8 +331,16 @@ transExpr x = case x of
     G.ERel pos expr1 relop expr2 -> do
         e1 <- transExpr expr1
         e2 <- transExpr expr2
-        ensureMyType pos e1 MyInt
-        ensureMyType pos e2 MyInt
+        case relop of
+            G.EQU _ -> do 
+                ensureBasicType pos e1
+                ensureBasicType pos e2
+            G.NE _ -> do 
+                ensureBasicType pos e1
+                ensureBasicType pos e2
+            _ -> do
+                ensureMyType pos e1 MyInt
+                ensureMyType pos e2 MyInt
         return MyBool
 
     G.EAnd pos expr1 expr2 -> do

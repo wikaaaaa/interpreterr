@@ -44,12 +44,22 @@ transMulOp x = case x of
     G.Div _ -> return (div, True)
     G.Mod _ -> return (mod, False)
 
-transRelOp :: G.RelOp -> Result(Integer -> Integer -> Bool)
-transRelOp x = case x of
+transRelOpInt :: G.RelOp -> Result(Integer -> Integer -> Bool)
+transRelOpInt x = case x of
     G.LTH _ -> return (<)
     G.LE _ -> return (<=)
     G.GTH _ -> return (>)
     G.GE _ -> return (>=)
+    G.EQU _ -> return (==)
+    G.NE _ -> return (/=)
+
+transRelOpStr :: G.RelOp -> Result(String -> String -> Bool)
+transRelOpStr x = case x of
+    G.EQU _ -> return (==)
+    G.NE _ -> return (/=)
+
+transRelOpBool :: G.RelOp -> Result(Bool -> Bool -> Bool)
+transRelOpBool x = case x of
     G.EQU _ -> return (==)
     G.NE _ -> return (/=)
 

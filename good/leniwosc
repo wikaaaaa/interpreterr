@@ -1,0 +1,16 @@
+def bool p() { 
+   fn print("Jestem w p"); 
+   return true;
+}
+
+def void main() {
+    var int x = 5;
+    if ((x > 4) || fn p()) {
+       fn print("if");
+    } else {
+       fn print("else");
+    }
+   return;
+}
+   
+

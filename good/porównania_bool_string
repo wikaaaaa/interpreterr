@@ -1,0 +1,13 @@
+def void main() {
+    var string pierwszy = "ala";
+    var string drugi = "Ala";
+    if (pierwszy != drugi) {
+        var bool tak = true;
+        var bool tak1 = true;
+        if (tak == tak1) {
+            fn print("porównania działają");
+        }
+    }
+
+    return;
+}

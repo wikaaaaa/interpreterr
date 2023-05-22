@@ -19,6 +19,7 @@ printPos Nothing = ""
 printPos (Just (l,c)) = " at line " ++ show l ++ ", column " ++ show c
 
 data MyError = ErrorTypeMismatch Type Type G.BNFC'Position 
+             | ErrorTypeMismatch1 String Type G.BNFC'Position 
              | ErrorUndefinedVariable String G.BNFC'Position
              | ErrorNoReturn String G.BNFC'Position
              | ErrorReturnTypeMismatch String Type Type G.BNFC'Position
@@ -59,6 +60,7 @@ instance Show MyError where
     show (ErrorReturn err_type pos) = "ReturnError\n " ++ "Return statement " ++ err_type ++ printPos pos
     show (ErrorNotFunction name pos) = "NotFunctionError \n" ++ name ++ " used" ++ printPos pos ++ " is a variable not a function"
     show (ErrorVoid pos) = "VoidError\n type void not allowed" ++ printPos pos
+    show (ErrorTypeMismatch1 expected actual pos) = "TypesMismatchError \n expected type: " ++ expected ++ ", actual type: " ++ show actual ++ printPos pos
 
 checkIfAvailableFunc :: String -> Env -> G.BNFC'Position -> Result ()
 checkIfAvailableFunc id env pos = do
@@ -87,6 +89,13 @@ checkIfAvailableVarInEnv id env pos = do
 
 ensureMyType pos t etype = do
     when (t /= etype) $ throwError $ show $ ErrorTypeMismatch etype t pos
+
+ensureBasicType pos t = do
+    case t of
+        MyInt -> return()
+        MyBool -> return()
+        MyStr -> return()
+        _ -> throwError $ show $ ErrorTypeMismatch1 "int, bool or string" t pos
 
 checkPrintArgs [] pos nb = return True
 checkPrintArgs (expr:exprs) pos nb = do
