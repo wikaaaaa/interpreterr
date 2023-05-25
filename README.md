@@ -4,6 +4,8 @@ Poprawka zawiera
 - rekurencje w lokalnych funkcjach (good/06-rekurencja_fib_lokalne)
 - sprawdzenia, czy argumenty nie są typu void (bad/ErrorVoid)
 - sprawdzenie, czy nazwy argumentów się nie powtarzają (bad/ErrorUsedName_args)
+- operacje boolowskie są leniwe (good/leniwosc)
+- porównywanie napisów i wartości boolowskich (good/porównania_bool_string)
 
 ***
 
