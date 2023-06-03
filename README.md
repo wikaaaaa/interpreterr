@@ -1,11 +1,30 @@
 # interpreter
 
-Poprawka zawiera
-- rekurencje w lokalnych funkcjach (good/06-rekurencja_fib_lokalne)
-- sprawdzenia, czy argumenty nie są typu void (bad/ErrorVoid)
-- sprawdzenie, czy nazwy argumentów się nie powtarzają (bad/ErrorUsedName_args)
-- operacje boolowskie są leniwe (good/leniwosc)
-- porównywanie napisów i wartości boolowskich (good/porównania_bool_string)
+Aktualna wersja zawiera
+* dodatki:
+    * zmienne typu ```func```
+        * func to typ funkcyjny posiadającu dwa parametry - typ zwracanej wartości i typy argumentów funkcji
+
+            ```var func [<typ zwracanej wartości>] [<typy argumentów>] f;```
+    * funkcje anonimowe 
+        * tworzenie funkcji anonimowych:
+        
+            ```def <typ zwracanej wartości> (<typy argumentów>) { ... }; ```
+        * żeby wywołać funkcję anonimową, trzeba ją najpierw przypisać na zmienną
+
+    * możliwość przekazywania funkcji jako parametrów (good/17-funkcje/argument_anonimowa good/17-funkcje/argument_funkcja)
+        * funkcje anonimowe i lokalne mogą być przekazywane przez referencje (good/17-funkcje/argument_ref_anonimowa good/17-funkcje/argument_ref_funkcja)
+        * funkcje globalne nie mogą być przekazywane przez referencje, ponieważ nie wolno zmieniać definicji funkcji globalnych (bad/funkcje/GlobalFunctionRefError)
+
+    * moliwość zwracania funkcji w wyniku (good/17-funkcje/return_anonimowa good/17-funkcje/return_funkcja)
+    * domknięcia à la JavaScript (good/17-funkcje/domkniecie good/17-funkcje/domkniecie2)
+
+* poprawki:
+    - rekurencje w lokalnych funkcjach (good/06-rekurencja_fib_lokalne)
+    - sprawdzenia, czy argumenty nie są typu void (bad/ErrorVoid)
+    - sprawdzenie, czy nazwy argumentów się nie powtarzają (bad/ErrorUsedName_args)
+    - operacje boolowskie są leniwe (good/leniwosc)
+    - porównywanie napisów i wartości boolowskich (good/porównania_bool_string)
 
 ***
 
@@ -28,7 +47,8 @@ Można też uruchomić interperter bez podawania nazwy pliku, wtedy można poda�
 ***
 
 Są pewne różnice względem wstępnej deklaracji, np:
-* tablice i krotki zostaną zaimplementowane dopiero w drugim terminie
+* są funkcje anonimowe
+* nie ma tablic i krotek
 * doprecyzowanie struktury funkcji, m.in.:
     * każda funkcja musi zawierać return
     * return musi znajdować się na końcu bloku
@@ -59,7 +79,7 @@ AKTUALNA TABELA CECH:
     -  14 (1/2) (rekordy/listy/tablice/tablice wielowymiarowe)
     -  15 (2) (krotki z przypisaniem)
     +  16 (1) (break, continue)
-    -  17 (4) (funkcje wyższego rzędu, anonimowe, domknięcia)
+    +  17 (4) (funkcje wyższego rzędu, anonimowe, domknięcia)
     -  18 (3) (generatory)
 
-Razem: 27
+Razem: 31

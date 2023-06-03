@@ -71,13 +71,16 @@ checkArgs (arg:args) (expr:exprs) name pos i = case arg of
     MyRef ref -> case expr of
         G.EVar _ _ -> do
                 e <- transExpr expr
-                when (ref /= e) $ throwError $ show $ ErrorArgumentTypeMismatch name i ref e pos 
-                checkArgs args exprs name pos (i+1)
+                case e of
+                    MyFunc _ _ True -> throwError $ show $ ErrorGlobalFunctionRef name i pos 
+                    _ -> do
+                        when (ref /= e) $ throwError $ show $ ErrorArgumentTypeMismatch name i ref e pos 
+                        checkArgs args exprs name pos (i+1)
         _ -> throwError $ show $ ErrorReference name i pos
 
     a -> do
         e <- transExpr expr
-        when (a /= e) $ throwError $ show $ ErrorArgumentTypeMismatch name i a e pos 
+        when (typesMismatch a e) $ throwError $ show $ ErrorArgumentTypeMismatch name i a e pos 
         checkArgs args exprs name pos (i+1)
 
 transTopDefsFuncOnly :: [G.TopDef] -> Env -> Result Env
@@ -102,7 +105,7 @@ transTopDefsFuncOnly (y:ys) env = case y of
                 checkIfAvailableFunc id env pos
                 ret_type <- transType type_
                 args_type <- transArg args []
-                let res = MyFunc ret_type args_type                  
+                let res = MyFunc ret_type args_type True              
                 let new_env  = env { varType = M.insert id res (varType env), names = Set.insert id ( names env )  }
                 transTopDefsFuncOnly ys new_env
 
@@ -129,7 +132,7 @@ transTopDefs (y:ys) = case y of
                 new_env <- addArgToEnv args new_env
                 ret_type <- transType type_
                 returned_type <- local (\e -> new_env) (transBlockWithRet block id pos)
-                when (returned_type /= ret_type) $ throwError $ show $ ErrorReturnTypeMismatch id ret_type returned_type pos
+                when (typesMismatch ret_type returned_type) $ throwError $ show $ ErrorReturnTypeMismatch id ret_type returned_type pos
                 local (\e -> e) (transTopDefs ys)
 
     G.VarDef pos type_ item -> case item of
@@ -144,7 +147,7 @@ transTopDefs (y:ys) = case y of
             id <- transIdent ident
             checkIfAvailableVar id pos
             t <- transTypeNotVoid type_
-            when (e /= t) $ throwError $ show $ ErrorTypeMismatch t e pos
+            when (typesMismatch t e) $ throwError $ show $ ErrorTypeMismatch t e pos
             local (\e -> e { varType = M.insert id t (varType e) , names = Set.insert id ( names e ) }) (transTopDefs ys)
 
 
@@ -163,14 +166,14 @@ transStmts (x:xs) = case x of
             ret_type <- transType type_
             args_type <- transArg args []
 
-            let res = MyFunc ret_type args_type
+            let res = MyFunc ret_type args_type False
 
             let env_with_func = env { varType = M.insert id res (varType env), names = Set.insert id ( Set.empty )  }
 
             new_env <- addArgToEnv args env_with_func
             
             returned_type <- local (\e -> new_env) (transBlockWithRet block id pos)
-            when (returned_type /= ret_type) $ throwError $ show $ ErrorReturnTypeMismatch id ret_type returned_type pos
+            when (typesMismatch  ret_type returned_type) $ throwError $ show $ ErrorReturnTypeMismatch id ret_type returned_type pos
             
             local (\e -> e { varType = M.insert id res (varType e), names = Set.insert id ( names e )  }) (transStmts xs)
 
@@ -183,23 +186,26 @@ transStmts (x:xs) = case x of
 
 
             G.Init pos ident expr -> do
-                e <- transExpr expr
+                exp_t <- transExpr expr
                 id <- transIdent ident
                 checkIfAvailableVar id pos
                 t <- transTypeNotVoid type_
-                when (e /= t) $ throwError $ show $ ErrorTypeMismatch t e pos
-                local (\e -> e { varType = M.insert id t (varType e) , names = Set.insert id ( names e ) }) (transStmts xs)
+                when (typesMismatch t exp_t) $ throwError $ show $ ErrorTypeMismatch t exp_t pos
+                local (\e -> e { varType = M.insert id exp_t (varType e) , names = Set.insert id ( names e ) }) (transStmts xs)
 
     G.Ass pos ident expr -> do
-        t <- transExpr expr
+        exp_t <- transExpr expr
         id <- transIdent ident
         env <- ask
         let i = M.lookup id (varType env)
         case i of
             Nothing -> throwError $ show $ ErrorUndefinedVariable id pos
             Just tt -> do
-                when (tt /= t) $ throwError $ show $ ErrorTypeMismatch tt t pos
-                transStmts xs
+                case tt of
+                    MyFunc _ _ True -> throwError $ show $ ErrorGlobalFunction id pos
+                    _ -> do
+                        when (typesMismatch tt exp_t) $ throwError $ show $ ErrorTypeMismatch tt exp_t pos
+                        local (\e -> e { varType = M.insert id exp_t (varType e) }) (transStmts xs)
 
     G.Incr pos ident -> do
         id <- transIdent ident
@@ -271,6 +277,19 @@ transStmts (x:xs) = case x of
 transExpr ::  G.Expr -> Result Type
 transExpr x = case x of
 
+    G.DeclAn pos type_ args block -> do
+        ret_type <- transType type_
+        args_type <- transArg args []
+
+        let res = MyFunc ret_type args_type False
+
+        env <- ask
+        new_env <- addArgToEnv args env
+        returned_type <- local (\e -> new_env) (transBlockWithRet block "anonimowa" pos)
+        when (typesMismatch ret_type returned_type) $ throwError $ show $ ErrorReturnTypeMismatch "anonimowa" ret_type returned_type pos
+
+        return res
+
     G.EVar pos ident -> do
         id <- transIdent ident
         env <- ask
@@ -289,7 +308,7 @@ transExpr x = case x of
         id <- transIdent ident
         case id of
             "print" -> do
-                checkPrintArgs e pos 1
+                checkPrintArgs e pos
                 return $ MyVoid
             _ -> do
                 env <- ask
@@ -297,7 +316,7 @@ transExpr x = case x of
                 case i of
                     Nothing -> throwError $ show $ ErrorUndefinedFunction id pos
                     Just val -> case val of
-                        MyFunc ret args -> do
+                        MyFunc ret args _ -> do
                             checkArgs args exprs id pos 1
                             return ret
                         _ -> throwError $ show $ ErrorNotFunction id pos

@@ -1,0 +1,27 @@
+def void f(ref func[void][] f1) {
+    
+    f1 = def void() { fn print("byeee"); return; };
+
+   return;
+}
+
+def void glob() {
+    fn print("hello");
+    return;
+}
+
+def void main () {
+
+    def void lok() {
+        fn print("hello");
+        return;
+    }
+
+    fn f(lok); # dozwolone
+    fn lok();
+
+    fn f(glob); # nie dozwolone
+    fn glob();
+    
+    return;
+}

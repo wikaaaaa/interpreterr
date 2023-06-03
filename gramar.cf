@@ -64,7 +64,17 @@ MyBool.      Type ::= "bool" ;
 
 MyVoid.      Type ::= "void" ;
 
+MyFunc.      Type ::= "func" "[" Type "]" "[" [ArgAn] "]";
+
+ArgAn.       ArgAn ::= Type;
+
+ArgAnRef.       ArgAn ::= "ref" Type;
+
+separator  ArgAn "," ;
+
 -- Expressions ---------------------------------------------
+
+DeclAn.    Expr6 ::= "def" Type "(" [Arg] ")" Block ;
 
 EVar.      Expr6 ::= Ident ;
 

@@ -1,0 +1,10 @@
+def func[int][int, int] f_dodaj() {
+    return def int(int x, int y) { return x + y; };
+}
+
+def void main() {
+     var func[int][int, int] dodaj;
+     dodaj = fn f_dodaj();
+     fn print(fn dodaj(1,5));
+     return;
+}

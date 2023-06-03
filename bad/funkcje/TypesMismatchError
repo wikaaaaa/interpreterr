@@ -1,0 +1,9 @@
+def void main() {
+    
+  var func[int][int, int] f = def int(int x, int y) { return x ;};
+  f = def int(int x, bool y) { return x ;};
+  var int d = fn f(1, true);
+  fn print(d);
+  return;
+
+}

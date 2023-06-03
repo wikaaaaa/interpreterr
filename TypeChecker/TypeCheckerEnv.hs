@@ -5,7 +5,8 @@ import Control.Monad.Reader
 import Control.Monad.Except
 import qualified Data.Set as Set
 
-data Type = MyInt | MyBool | MyStr | MyVoid | MyFunc Type [Type] | MyRef Type | MyNothing
+-- MyFunc Type [Type] Bool ->  (Bool == True) oznacza, ze funkcja jest funkcją globalną
+data Type = MyInt | MyBool | MyStr | MyVoid | MyFunc Type [Type] Bool | MyRef Type | MyNothing
     deriving(Eq)
 
 data Env = Env { 

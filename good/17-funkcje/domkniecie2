@@ -1,0 +1,22 @@
+def void main() {
+
+    def func[void][] f2() {
+
+        var int x = 0;
+
+        var func[void][] f = def void() { x = x + 100; fn print("TUTAJ: ", x); return; };
+
+        fn print("tutaj ", x);
+
+        return f;
+    }
+    
+    var func[void][] f = fn f2();
+
+    fn print("main");
+    
+    fn f();
+
+    return;
+
+}

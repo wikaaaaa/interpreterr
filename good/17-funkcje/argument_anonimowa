@@ -1,0 +1,21 @@
+def void f(func[void][int] wypisz) {
+    
+    var int x = 10;
+
+    fn wypisz(x);
+
+   return;
+}
+
+    
+def void main() {
+
+    var int x = 0;
+
+    var func[void][int] wypisz = def void(int y) { if (y > x) { fn print ("wieksza niz zero"); } return; };
+    
+    fn f(wypisz);
+    
+    return;
+
+}

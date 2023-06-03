@@ -1,0 +1,22 @@
+def void glob() {
+    fn print("hello");
+    return;
+}
+
+def void main () {
+
+    def void lok() {
+        fn print("hello");
+        return;
+    }
+
+    var func[void][] f = def void() { fn print("bye"); return; };
+
+    lok = f; # mozna modyfikowac funkcje lokalne
+    fn lok();
+
+    glob = f; # nie mozna modyfikowac funkcji globalnych
+    fn glob();
+    
+    return;
+}

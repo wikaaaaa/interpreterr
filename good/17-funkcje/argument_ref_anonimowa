@@ -1,0 +1,22 @@
+def void f(ref func[void][] wypisz) {
+    
+    wypisz = def void() {fn print("b"); return; };
+
+   return;
+}
+
+    
+def void main() {
+
+    var int x = 0;
+
+    var func[void][] wypisz = def void() {fn print("a"); return; };
+    
+    fn wypisz();
+    fn f(wypisz);
+    fn wypisz();
+
+    
+    return;
+
+}
