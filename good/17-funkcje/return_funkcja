@@ -1,0 +1,16 @@
+def func[void][string] f() {
+
+    def void f1(string s) {
+        fn print(s);
+        return;
+    }
+    return f1;
+}
+
+def void main() {
+    var func[void][string] wypisz = fn f();
+
+    fn wypisz("ala ma kota");
+
+    return;
+}

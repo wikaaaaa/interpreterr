@@ -12,7 +12,7 @@ instance Show Type where
     show (MyBool) = "bool"
     show (MyStr) = "string"
     show (MyVoid) = "void"
-    show (MyFunc t1 t2) = "function (" ++ show t2 ++ show t1 ++ ")"
+    show (MyFunc t1 t2 _) = "function [" ++ show t1  ++"]" ++ show t2
     show (MyRef t) = "ref" ++ show t
 
 printPos Nothing = ""
@@ -37,6 +37,9 @@ data MyError = ErrorTypeMismatch Type Type G.BNFC'Position
              | ErrorReturn String G.BNFC'Position
              | ErrorNotFunction String G.BNFC'Position
              | ErrorVoid G.BNFC'Position
+             | ErrorFunc G.BNFC'Position
+             | ErrorGlobalFunction String G.BNFC'Position
+             | ErrorGlobalFunctionRef String Int G.BNFC'Position
 
 instance Show MyError where
     show (ErrorTypeMismatch expected actual pos) = "TypesMismatchError \n expected type: " ++ show expected ++ ", actual type: " ++ show actual ++ printPos pos
@@ -61,6 +64,9 @@ instance Show MyError where
     show (ErrorNotFunction name pos) = "NotFunctionError \n" ++ name ++ " used" ++ printPos pos ++ " is a variable not a function"
     show (ErrorVoid pos) = "VoidError\n type void not allowed" ++ printPos pos
     show (ErrorTypeMismatch1 expected actual pos) = "TypesMismatchError \n expected type: " ++ expected ++ ", actual type: " ++ show actual ++ printPos pos
+    show (ErrorFunc pos) = "FuncError\n type func not allowed" ++ printPos pos
+    show (ErrorGlobalFunction id pos) = "GlobalFunctionError\n" ++ id ++ printPos pos ++ " is a global function \n modifying gloabl functions is not allowed" 
+    show (ErrorGlobalFunctionRef name nb pos) = "GlobalFunctionRefError \n Error in use of function " ++ name ++ printPos pos ++ ", argument number " ++ show nb ++ " is a global funtion, \n global functions cant be passed by reference"
 
 checkIfAvailableFunc :: String -> Env -> G.BNFC'Position -> Result ()
 checkIfAvailableFunc id env pos = do
@@ -97,13 +103,20 @@ ensureBasicType pos t = do
         MyStr -> return()
         _ -> throwError $ show $ ErrorTypeMismatch1 "int, bool or string" t pos
 
-checkPrintArgs [] pos nb = return True
-checkPrintArgs (expr:exprs) pos nb = do
-    when (expr == MyVoid) $ throwError $ show $ ErrorPrint nb pos
-    checkPrintArgs exprs pos (nb+1)
+checkPrintArgs [] pos = return True
+checkPrintArgs (expr:exprs) pos = do
+    ensureBasicType pos expr
+    checkPrintArgs exprs pos
 
 transIdent :: G.Ident -> Result String
 transIdent (G.Ident string) = return string
+
+transArgAn :: G.ArgAn -> Result Type
+transArgAn x = case x of
+  G.ArgAn pos type_ -> transTypeNotVoid type_
+  G.ArgAnRef pos type_ -> do
+    typee <- transTypeNotVoid type_
+    return $ MyRef typee
 
 transType ::  G.Type -> Result Type
 transType x = case x of
@@ -111,6 +124,10 @@ transType x = case x of
     G.MyStr _ -> return MyStr
     G.MyBool _ -> return MyBool
     G.MyVoid _ -> return MyVoid
+    G.MyFunc _ type_ types -> do
+        ret_type <- transType type_
+        args <- mapM transArgAn types
+        return $ MyFunc ret_type args False
 
 transTypeNotVoid ::  G.Type -> Result Type
 transTypeNotVoid x = case x of
@@ -118,3 +135,24 @@ transTypeNotVoid x = case x of
     G.MyStr _ -> return MyStr
     G.MyBool _ -> return MyBool
     G.MyVoid pos -> throwError $ show $ ErrorVoid pos
+    G.MyFunc _ type_ types -> do
+        ret_type <- transType type_
+        args <- mapM transArgAn types
+        return $ MyFunc ret_type args False
+
+transTypeNotVoidFunc ::  G.Type -> Result Type
+transTypeNotVoidFunc x = case x of
+    G.MyInt _ -> return MyInt
+    G.MyStr _ -> return MyStr
+    G.MyBool _ -> return MyBool
+    G.MyVoid pos -> throwError $ show $ ErrorVoid pos
+    G.MyFunc pos _ _ -> throwError $ show $ ErrorFunc pos
+
+
+
+typesMismatch (MyFunc a b False) (MyFunc c d True) = do
+    if (a /= c || b /= d) then True else False
+
+typesMismatch expected actual = do
+    if (expected /= actual) then True else False
+        

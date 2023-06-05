@@ -191,21 +191,37 @@ doFunc (arg:args) (expr:exprs) env = case arg of
 transExpr ::  G.Expr -> Result TypeOfResult
 transExpr x = case x of
 
+    G.DeclAn pos type_ args block -> do
+        env <- ask
+        let new_func = MyFunc (G.FnDef pos type_ (G.Ident "") args block) env
+        return new_func
+
     G.EVar pos ident -> do
         env <- ask
         id <-  transIdent ident
-        let Just l = M.lookup id (varEnv env)
-        (st,_,_)  <- get
-        let val = M.lookup l st
-        case val of
-            Nothing -> throwError $ show $ ErrorUninitializedVariable id pos
-            Just v -> return v
+        (st,_,globFunc) <- get
+
+        let loc =  M.lookup id (varEnv env)
+        case loc of
+
+            Just l -> do
+                let val = M.lookup l st
+                case val of
+                    Nothing -> throwError $ show $ ErrorUninitializedVariable id pos
+                    Just v -> return v
+
+            Nothing -> do -- funkcja globalna
+                let Just (funcc, fenv) = M.lookup id globFunc
+                return $ MyFunc funcc fenv
+
+        
+        
 
     G.ELitInt _ integer -> return $ MyInt integer
     G.ELitTrue _ -> return $ MyBool True
     G.ELitFalse _ -> return $ MyBool False
 
-    G.EApp _ ident exprs -> do
+    G.EApp pos ident exprs -> do
         e <- mapM transExpr exprs
         id <- transIdent ident
         case id of
@@ -223,8 +239,11 @@ transExpr x = case x of
                         let Just (fun, env) = M.lookup id globFunc
                         local (\e -> e) (transAppFunc fun exprs env)
                     Just l -> do
-                        let Just (MyFunc func old_env) = M.lookup l st
-                        local (\e -> e) (transAppFunc func exprs old_env)
+                        let func = M.lookup l st
+                        case func of
+                            Just (MyFunc func old_env) -> do
+                                local (\e -> e) (transAppFunc func exprs old_env)
+                            Nothing -> throwError $ show $ ErrorUninitializedVariable id pos
                             
     G.EString _ string -> return $ MyStr string
 

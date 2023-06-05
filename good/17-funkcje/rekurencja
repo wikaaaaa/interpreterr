@@ -1,0 +1,18 @@
+def void main() {
+
+    def func[void][] f2(int x) {
+
+        if (x == 100) {
+            var func[void][] f1 = fn f2(101);
+            fn f1();
+        }
+
+        var func[void][] f = def void() { fn print("hello"); return; };
+    return f;
+    }
+    
+    fn f2(100);
+
+    return;
+
+}

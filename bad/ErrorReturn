@@ -1,4 +1,4 @@
-def void func() {
+def void f() {
     var int x = 0;
     if (x == 0) {
         return;

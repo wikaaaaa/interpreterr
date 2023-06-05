@@ -1,6 +1,6 @@
 def void main () {
     #var void x;
-    def int func(void x) {
+    def int funkcja(void x) {
         return 3;
     }
     return;

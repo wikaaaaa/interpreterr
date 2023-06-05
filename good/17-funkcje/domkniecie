@@ -1,0 +1,16 @@
+def void  glob(func[void][] f) {
+    fn f();
+    return;
+}
+
+def void main() {
+
+    var int x = 10;
+
+    var func[void][] zmienX = def void() { x = 20; return; };
+    fn print("przed wywołaniem glob ", x);
+    fn glob(zmienX);
+    fn print("po wywołaniu glob ", x);
+    return;
+
+}

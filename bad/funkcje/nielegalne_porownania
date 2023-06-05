@@ -1,0 +1,8 @@
+def void main() {
+    var func[void][] f1 = def void() {return; };
+    var func[void][] f2 = def void() {return; };
+    if (f1 == f2) {
+        fn print("hello");
+    }
+    return;
+}

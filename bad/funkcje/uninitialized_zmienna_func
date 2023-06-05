@@ -1,0 +1,8 @@
+def void main() {
+    
+  var func[int][int, int] f;
+  var int d = fn f(1, 5); # unitialized variable f
+  fn print(d);
+  return;
+
+}
